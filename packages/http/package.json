@@ -1,7 +1,7 @@
 {
-  "name": "@nodemelivre/core",
+  "name": "@nodemelivre/http",
   "version": "0.1.0",
-  "description": "Núcleo do NodeMeLivre: transport, logger e test-utils",
+  "description": "Cliente HTTP com retry, rate limit e timeout do NodeMeLivre",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -9,10 +9,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./test-utils": {
-      "types": "./dist/test-utils.d.ts",
-      "import": "./dist/test-utils.js"
     }
   },
   "files": [
@@ -25,5 +21,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@nodemelivre/core": "*",
+    "@nodemelivre/errors": "*"
   }
 }

@@ -1,3 +1,15 @@
+export type ShipmentStatus =
+  | 'pending'
+  | 'handed_to_carrier'
+  | 'shipped'
+  | 'delivered'
+  | 'cancelled'
+  | 'not_delivered'
+  | 'failed'
+  | 'available_for_pickup'
+
+export type ShippingType = 'custom' | 'me1' | 'me2' | 'me3'
+
 export interface ShipmentAddress {
   id?: number
   address_line: string
@@ -13,11 +25,11 @@ export interface ShipmentAddress {
 
 export interface Shipment {
   id: number
-  status: string
+  status: ShipmentStatus
   status_history?: Record<string, string>
   date_created: string
   date_first_printed?: string
-  shipping_type: string
+  shipping_type: ShippingType
   service_id?: number
   sender_address: ShipmentAddress
   receiver_address: ShipmentAddress

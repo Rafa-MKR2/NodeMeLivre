@@ -19,9 +19,22 @@ export interface OrderItem {
   sale_fee: number
 }
 
+export type OrderStatus = 'confirmed' | 'payment_required' | 'cancelled' | 'invalid'
+
+export type PaymentStatus =
+  | 'approved'
+  | 'pending'
+  | 'rejected'
+  | 'cancelled'
+  | 'in_process'
+  | 'refunded'
+  | 'charged_back'
+
+export type ShipmentType = 'custom' | 'me1' | 'me2' | 'me3'
+
 export interface Order {
   id: number
-  status: string
+  status: OrderStatus
   status_detail?: string
   date_created: string
   date_closed?: string
@@ -33,7 +46,7 @@ export interface Order {
   payments?: {
     id: number
     order_id: number
-    status?: string
+    status?: PaymentStatus
     status_detail?: string
     transaction_amount: number
     currency_id: string
@@ -42,7 +55,7 @@ export interface Order {
   }[]
   shipping?: {
     id: number
-    shipment_type?: string
+    shipment_type?: ShipmentType
     date_created?: string
   }
 }
@@ -51,7 +64,7 @@ export interface OrderSearchParams {
   seller?: number
   buyer?: number
   q?: string
-  status?: string
+  status?: OrderStatus
   date_created?: string
   sort?: string
   offset?: number

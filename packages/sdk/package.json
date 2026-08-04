@@ -25,6 +25,8 @@
   "dependencies": {
     "@nodemelivre/auth": "*",
     "@nodemelivre/core": "*",
+    "@nodemelivre/errors": "*",
+    "@nodemelivre/http": "*",
     "@nodemelivre/items": "*",
     "@nodemelivre/orders": "*",
     "@nodemelivre/questions": "*",

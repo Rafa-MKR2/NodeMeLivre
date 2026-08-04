@@ -5,8 +5,7 @@
     "paths": {
       "@nodemelivre/core/test-utils": ["../core/src/test-utils.ts"],
       "@nodemelivre/core": ["../core/src/index.ts"],
-      "@nodemelivre/errors": ["../errors/src/index.ts"],
-      "@nodemelivre/http": ["../http/src/index.ts"]
+      "@nodemelivre/errors": ["../errors/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts"]

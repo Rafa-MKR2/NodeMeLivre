@@ -1,5 +1,5 @@
-import { ApiError, NetworkError, RateLimitError, toApiError } from '../errors/index.js'
-import { type Logger, silentLogger } from '../logger.js'
+import { type Logger, silentLogger } from '@nodemelivre/core'
+import { ApiError, NetworkError, RateLimitError, toApiError } from '@nodemelivre/errors'
 import type { RateLimiter } from './rate-limit.js'
 import {
   DEFAULT_RETRY,

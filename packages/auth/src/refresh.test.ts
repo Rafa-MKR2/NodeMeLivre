@@ -1,4 +1,4 @@
-import { OAuthError } from '@nodemelivre/core'
+import { OAuthError } from '@nodemelivre/errors'
 import { describe, expect, it, vi } from 'vitest'
 import type { OAuthClient } from './oauth.js'
 import { TokenManager } from './refresh.js'

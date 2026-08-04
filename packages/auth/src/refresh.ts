@@ -1,4 +1,6 @@
-import { type Logger, OAuthError, silentLogger, type TokenProvider } from '@nodemelivre/core'
+import { type Logger, silentLogger } from '@nodemelivre/core'
+import { OAuthError } from '@nodemelivre/errors'
+import type { TokenProvider } from '@nodemelivre/http'
 import type { OAuthClient } from './oauth.js'
 import type { AccessToken, TokenStore } from './token.js'
 
