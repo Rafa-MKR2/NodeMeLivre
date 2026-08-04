@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/rafaeldc/MANUAL-DAS-BOAS-PRATICAS/tree/main/docs
+    about: Leia a documentação antes de abrir uma issue.

@@ -1,0 +1,15 @@
+# Definir quem revisa automaticamente cada área do repositório.
+# Formato: padrão de caminho -> proprietário.
+
+# Documentação
+docs/            @Rafa-MKR2
+.github/         @Rafa-MKR2
+
+# Exemplos
+examples/        @Rafa-MKR2
+
+# Pacote principal
+packages/        @Rafa-MKR2
+
+# Regras gerais (fallback)
+*                @Rafa-MKR2
