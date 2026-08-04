@@ -2,7 +2,7 @@
 
 > SDK TypeScript para a API do Mercado Livre — tipado, modular e sem esconder a API por baixo.
 
-NodeMeLivre é uma camada de alto nível sobre a [API do Mercado Livre](https://developers.mercadolivre.com.br). Ele cuida do que é repetitivo (OAuth2, retry, rate limit, paginação futura) sem embrulhar o funcionamento da API: o que a API expõe, o SDK expõe.
+NodeMeLivre é um SDK moderno para a [API do Mercado Livre](https://developers.mercadolivre.com.br). Ele simplifica autenticação, gerenciamento de tokens, paginação, tratamento de erros e outras tarefas repetitivas, mantendo uma correspondência fiel com os recursos e comportamentos da API oficial. Todo recurso disponível na API permanece acessível através do SDK, sem abstrações que escondam funcionalidades ou limitem o controle do desenvolvedor.
 
 ## Instalação
 
