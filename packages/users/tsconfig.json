@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@nodemelivre/core/test-utils": ["../core/src/test-utils.ts"],
+      "@nodemelivre/core": ["../core/src/index.ts"],
+      "@nodemelivre/types": ["../types/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

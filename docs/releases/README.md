@@ -1,6 +1,6 @@
 # Processo de release
 
-Fluxo para publicar novas versões do `@nodemelivre/sdk`. Segue o padrão do [MANUAL-DAS-BOAS-PRATICAS](../docs/decisions/) e usa [SemVer](https://semver.org/lang/pt-BR/).
+Fluxo para publicar novas versões dos pacotes do NodeMeLivre. Segue o padrão do [MANUAL-DAS-BOAS-PRATICAS](../docs/decisions/) e usa [SemVer](https://semver.org/lang/pt-BR/).
 
 ## Regras
 
@@ -9,13 +9,23 @@ Fluxo para publicar novas versões do `@nodemelivre/sdk`. Segue o padrão do [MA
 - Atualizar `CHANGELOG.md` e o [roadmap](roadmap/README.md) **no mesmo release** do código.
 - `v1.0.0` é o marco de publicação pública; antes disso `v0.x` não garante estabilidade de API.
 
+## Ordem de publicação
+
+A dependência entre pacotes define a ordem:
+
+1. `@nodemelivre/core`
+2. `@nodemelivre/types`
+3. `@nodemelivre/auth`
+4. `@nodemelivre/items`, `@nodemelivre/orders`, `@nodemelivre/users`, `@nodemelivre/shipments`, `@nodemelivre/questions`
+5. `@nodemelivre/sdk` (por último — agrega todos)
+
 ## Passos
 
-1. Bump de versão em `packages/sdk/package.json` e na raiz do monorepo.
+1. Bump de versão nos `package.json` afetados e na raiz do monorepo.
 2. `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build` — todos verdes.
 3. Atualizar `CHANGELOG.md` com a seção da nova versão.
 4. Marcar a versão no `docs/roadmap/README.md`.
-5. Publicar (`npm publish --workspace @nodemelivre/sdk`) quando aplicável.
+5. Publicar na ordem acima (`npm publish --workspace @nodemelivre/<pkg>`) quando aplicável.
 
 ## CHANGELOG
 

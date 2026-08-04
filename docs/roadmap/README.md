@@ -25,8 +25,14 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | CHANGELOG e processo de release | Média | Baixa | 1 dia | ✔ Concluído |
 | CI (lint + typecheck + test) | Média | Média | 2 dias | ✔ Concluído |
 | Renomear para NodeMeLivre + repo público no GitHub | Média | Baixa | 1 dia | ✔ Concluído |
-| Modularizar em @nodemelivre/core, auth, http, ... | Alta | Alta | 5 dias | ⏳ Planejado |
-| Nova ADR + cobertura: resources extras (payments, messages) | Baixa | Alta | 5 dias | ⏳ Planejado |
+| Arquitetura modular (ADR-0005) em 9 pacotes | Alta | Alta | 5 dias | ✔ Concluído |
+| Paginação com `for await` (`ml.items.list()`) | Alta | Média | 2 dias | ⏳ Planejado |
+| Operações nível 3 (`publish`, `pause`, `waitUntilPaid`, `reply`) | Alta | Média | 3 dias | ⏳ Planejado |
+| Eventos (`tokenRefreshed`, `rateLimit`, `request`, `response`, `error`) | Média | Média | 2 dias | ⏳ Planejado |
+| Upload de imagens (`ml.images.upload(file)`) | Média | Média | 2 dias | ⏳ Planejado |
+| Webhooks (`verify`, `parse`) | Média | Média | 3 dias | ⏳ Planejado |
+| PKCE no fluxo OAuth2 | Média | Média | 2 dias | ⏳ Planejado |
+| Resources extras (payments, messages, billing) | Baixa | Alta | 5 dias | ⏳ Planejado |
 
 ### Legenda de status
 

@@ -1,7 +1,7 @@
 {
-  "name": "@nodemelivre/sdk",
+  "name": "@nodemelivre/core",
   "version": "0.1.0",
-  "description": "NodeMeLivre: SDK TypeScript modular para a API do Mercado Livre",
+  "description": "Núcleo do NodeMeLivre: HTTP com retry/rate-limit, erros tipados e transport",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./test-utils": {
+      "types": "./dist/test-utils.d.ts",
+      "import": "./dist/test-utils.js"
     }
   },
   "files": [
@@ -21,15 +25,5 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
-  },
-  "dependencies": {
-    "@nodemelivre/auth": "*",
-    "@nodemelivre/core": "*",
-    "@nodemelivre/items": "*",
-    "@nodemelivre/orders": "*",
-    "@nodemelivre/questions": "*",
-    "@nodemelivre/shipments": "*",
-    "@nodemelivre/types": "*",
-    "@nodemelivre/users": "*"
   }
 }

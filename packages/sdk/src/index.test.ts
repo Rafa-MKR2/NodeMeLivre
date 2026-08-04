@@ -1,6 +1,6 @@
+import { json, mockFetch, restoreFetch } from '@nodemelivre/core/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createMercadoLivre } from './index.js'
-import { json, mockFetch, restoreFetch } from './test-utils.js'
 
 const fakeItem = {
   id: 'MLB1',

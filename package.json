@@ -11,17 +11,18 @@
     "node": ">=18.17.0"
   },
   "scripts": {
-    "build": "npm run build --workspace @nodemelivre/sdk",
-    "test": "npm run test --workspace @nodemelivre/sdk",
-    "test:watch": "npm run test:watch --workspace @nodemelivre/sdk",
-    "typecheck": "npm run typecheck --workspace @nodemelivre/sdk",
+    "build": "npm run build --workspace @nodemelivre/core && npm run build --workspace @nodemelivre/types && npm run build --workspace @nodemelivre/auth && npm run build --workspaces --if-present --workspace @nodemelivre/items --workspace @nodemelivre/orders --workspace @nodemelivre/users --workspace @nodemelivre/shipments --workspace @nodemelivre/questions && npm run build --workspace @nodemelivre/sdk",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "biome check .",
     "format": "biome format --write ."
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",
     "@types/node": "^22.0.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
   },
   "allowScripts": {
     "esbuild@0.28.1": true

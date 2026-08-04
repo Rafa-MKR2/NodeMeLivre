@@ -7,7 +7,8 @@ NodeMeLivre é um SDK moderno para a [API do Mercado Livre](https://developers.m
 ## Instalação
 
 ```bash
-npm install @nodemelivre/sdk
+npm install @nodemelivre/sdk        # tudo
+npm install @nodemelivre/core @nodemelivre/items   # só o que precisa
 ```
 
 > Requer Node ≥ 18.17 (fetch nativo).
@@ -51,16 +52,23 @@ const search = await ml.items.search('MLB', { q: 'fone bluetooth' })
 
 ## Estrutura do repositório
 
+Monorepo modular por domínio (ADR-0005). Cada pacote publica de forma independente:
+
 ```text
-packages/sdk/        Pacote publicável (@nodemelivre/sdk)
-  src/auth/          OAuth2, TokenManager, TokenStore
-  src/http/          Cliente, retry, rate limit
-  src/resources/     items, orders, users, shipments, questions
-  src/types/         Tipos de domínio (item, order, user, ...)
-  src/errors/        Erros tipados
+packages/core/       HTTP (retry, rate limit, timeout), erros, logger, transport
+packages/types/      Tipos de domínio (item, order, user, shipment, question)
+packages/auth/       OAuth2, TokenManager, TokenStore
+packages/items/      Recursos de anúncios
+packages/orders/     Recursos de vendas
+packages/users/      Recursos de usuários
+packages/shipments/  Recursos de envios
+packages/questions/  Recursos de perguntas
+packages/sdk/        Facade: re-exporta tudo (@nodemelivre/sdk)
 docs/                ADRs, roadmap, releases
 examples/            Exemplos executáveis
 ```
+
+`@nodemelivre/sdk` re-exporta todos os módulos — quem instala só o SDK tem tudo; quem quer leveza instala os pacotes individuais.
 
 ## Documentação
 

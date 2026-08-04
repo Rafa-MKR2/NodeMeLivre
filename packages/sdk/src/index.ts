@@ -1,15 +1,33 @@
-import { OAuthClient, type OAuthOptions } from './auth/oauth.js'
-import { TokenManager, type TokenManagerOptions } from './auth/refresh.js'
-import { type AccessToken, InMemoryTokenStore, type TokenStore } from './auth/token.js'
-import { HttpClient, type HttpClientOptions } from './http/client.js'
-import { RateLimiter } from './http/rate-limit.js'
-import type { RetryOptions } from './http/retry.js'
-import type { Logger } from './logger.js'
-import { Items } from './resources/items.js'
-import { Orders } from './resources/orders.js'
-import { Questions } from './resources/questions.js'
-import { Shipments } from './resources/shipments.js'
-import { Users } from './resources/users.js'
+import {
+  type AccessToken,
+  InMemoryTokenStore,
+  OAuthClient,
+  type OAuthOptions,
+  TokenManager,
+  type TokenManagerOptions,
+  type TokenStore,
+} from '@nodemelivre/auth'
+import {
+  HttpClient,
+  type HttpClientOptions,
+  type Logger,
+  RateLimiter,
+  type RetryOptions,
+} from '@nodemelivre/core'
+import { Items } from '@nodemelivre/items'
+import { Orders } from '@nodemelivre/orders'
+import { Questions } from '@nodemelivre/questions'
+import { Shipments } from '@nodemelivre/shipments'
+import { Users } from '@nodemelivre/users'
+
+export * from '@nodemelivre/auth'
+export * from '@nodemelivre/core'
+export * from '@nodemelivre/items'
+export * from '@nodemelivre/orders'
+export * from '@nodemelivre/questions'
+export * from '@nodemelivre/shipments'
+export * from '@nodemelivre/types'
+export * from '@nodemelivre/users'
 
 export interface MercadoLivreOptions {
   /** App ID da aplicação no Mercado Livre. */
@@ -60,17 +78,14 @@ export class MercadoLivre {
     if (options.siteId !== undefined) oauthOptions.siteId = options.siteId
     if (options.baseUrl !== undefined) oauthOptions.baseUrl = options.baseUrl
     if (options.fetchImpl !== undefined) oauthOptions.fetchImpl = options.fetchImpl
-
-    const tokenStore = options.tokenStore ?? new InMemoryTokenStore()
     this.auth = new OAuthClient(oauthOptions)
 
+    const tokenStore = options.tokenStore ?? new InMemoryTokenStore()
     const tokenManagerOptions: TokenManagerOptions = {
       oauth: this.auth,
       store: tokenStore,
     }
-    if (options.logger !== undefined) {
-      tokenManagerOptions.logger = options.logger
-    }
+    if (options.logger !== undefined) tokenManagerOptions.logger = options.logger
     this.tokens = new TokenManager(tokenManagerOptions)
 
     const httpOptions: HttpClientOptions = {
@@ -113,23 +128,4 @@ export function createMercadoLivre(options: MercadoLivreOptions): MercadoLivre {
   return new MercadoLivre(options)
 }
 
-export type { AuthorizationUrlOptions, OAuthOptions, TokenGrantOptions } from './auth/oauth.js'
-export type { TokenManagerOptions } from './auth/refresh.js'
-// Re-export da API pública.
-export type { AccessToken, TokenStore } from './auth/token.js'
-export { FileTokenStore, InMemoryTokenStore } from './auth/token.js'
-export * from './errors/index.js'
-export type {
-  HttpClientOptions,
-  HttpClientRequest,
-  HttpMethod,
-  TokenProvider,
-} from './http/client.js'
-export { HttpClient, MERCADO_LIVRE_BASE_URL } from './http/client.js'
-export type { RateLimitState } from './http/rate-limit.js'
-export { RateLimiter } from './http/rate-limit.js'
-export * from './http/retry.js'
-export type { Logger } from './logger.js'
-export type { ResourceRequest, ResourceTransport } from './resources/transport.js'
-export * from './types/index.js'
 export { MercadoLivre as default }

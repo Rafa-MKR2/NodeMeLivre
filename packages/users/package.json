@@ -1,7 +1,7 @@
 {
-  "name": "@nodemelivre/sdk",
+  "name": "@nodemelivre/users",
   "version": "0.1.0",
-  "description": "NodeMeLivre: SDK TypeScript modular para a API do Mercado Livre",
+  "description": "Recursos de usuários do NodeMeLivre para a API do Mercado Livre",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -23,13 +23,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@nodemelivre/auth": "*",
     "@nodemelivre/core": "*",
-    "@nodemelivre/items": "*",
-    "@nodemelivre/orders": "*",
-    "@nodemelivre/questions": "*",
-    "@nodemelivre/shipments": "*",
-    "@nodemelivre/types": "*",
-    "@nodemelivre/users": "*"
+    "@nodemelivre/types": "*"
   }
 }
