@@ -41,8 +41,14 @@ jobs:
         with:
           fetch-depth: 0
       - name: Validar mensagens de commit
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
-          git log --format=%B origin/main..HEAD | grep -Ev '^(feat|fix|docs|refactor|test|style|perf|build|ci|chore)(\(.+\))?: ' && {
+          if [ -z "$BASE_REF" ]; then
+            echo "Sem commit base, ignorando."
+            exit 0
+          fi
+          git log --no-merges --format=%s "$BASE_REF..HEAD" | grep -Ev '^(feat|fix|docs|refactor|test|style|perf|build|ci|chore)(\(.+\))?: ' && {
             echo "::error::Mensagem de commit fora do padrão"
             exit 1
           } || exit 0
