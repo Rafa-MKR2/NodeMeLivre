@@ -13,11 +13,13 @@ Fluxo para publicar novas versões dos pacotes do NodeMeLivre. Segue o padrão d
 
 A dependência entre pacotes define a ordem:
 
-1. `@nodemelivre/core`
-2. `@nodemelivre/types`
-3. `@nodemelivre/auth`
-4. `@nodemelivre/items`, `@nodemelivre/orders`, `@nodemelivre/users`, `@nodemelivre/shipments`, `@nodemelivre/questions`
-5. `@nodemelivre/sdk` (por último — agrega todos)
+1. `@nodemelivre/errors`
+2. `@nodemelivre/core`
+3. `@nodemelivre/http`
+4. `@nodemelivre/types`
+5. `@nodemelivre/auth`
+6. `@nodemelivre/items`, `@nodemelivre/orders`, `@nodemelivre/users`, `@nodemelivre/shipments`, `@nodemelivre/questions`
+7. `@nodemelivre/sdk` (por último — agrega todos)
 
 ## Passos
 

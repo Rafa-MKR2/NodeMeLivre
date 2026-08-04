@@ -25,7 +25,8 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | CHANGELOG e processo de release | Média | Baixa | 1 dia | ✔ Concluído |
 | CI (lint + typecheck + test) | Média | Média | 2 dias | ✔ Concluído |
 | Renomear para NodeMeLivre + repo público no GitHub | Média | Baixa | 1 dia | ✔ Concluído |
-| Arquitetura modular (ADR-0005) em 9 pacotes | Alta | Alta | 5 dias | ✔ Concluído |
+| Arquitetura modular (ADR-0005) em 11 pacotes (core, http, errors, types, auth, items, orders, users, shipments, questions, sdk) | Alta | Alta | 5 dias | ✔ Concluído |
+| Disciplina de tipos: unions para enums fechados (listing_type_id, order status, payment status, shipment status, question status, etc.) | Alta | Baixa | 1 dia | ✔ Concluído |
 | Paginação com `for await` (`ml.items.list()`) | Alta | Média | 2 dias | ⏳ Planejado |
 | Operações nível 3 (`publish`, `pause`, `waitUntilPaid`, `reply`) | Alta | Média | 3 dias | ⏳ Planejado |
 | Eventos (`tokenRefreshed`, `rateLimit`, `request`, `response`, `error`) | Média | Média | 2 dias | ⏳ Planejado |

@@ -28,10 +28,12 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Adicionado (arquitetura modular — ADR-0005)
 
-- Monorepo quebrado em pacotes por domínio, cada um publicável de forma independente:
-  - `@nodemelivre/core` — HTTP (retry, rate limit, timeout), erros tipados, logger, transport e test-utils.
-  - `@nodemelivre/types` — tipos de domínio (item, order, user, shipment, question).
+- Monorepo quebrado em **11 pacotes por domínio**, cada um publicável de forma independente:
+  - `@nodemelivre/errors` — hierarquia de erros tipados (`ApiError`, `NetworkError`, `OAuthError`, `RateLimitError`...).
+  - `@nodemelivre/core` — transport, logger, test-utils (infra transversal não-HTTP).
+  - `@nodemelivre/http` — `HttpClient`, retry, rate limit, timeout (camada HTTP independente).
+  - `@nodemelivre/types` — tipos de domínio (item, order, user, shipment, question) com **unions para enums fechados** (`ListingTypeId`, `ShippingMode`, `OrderStatus`, `PaymentStatus`, `ShipmentType`, `QuestionStatus`, `AnswerStatus`, `ShipmentStatus`, `UserType`, `SiteStatus`, `ReputationLevelId`).
   - `@nodemelivre/auth` — OAuth2, `TokenManager`, `TokenStore`.
   - `@nodemelivre/items`, `@nodemelivre/orders`, `@nodemelivre/users`, `@nodemelivre/shipments`, `@nodemelivre/questions`.
   - `@nodemelivre/sdk` — facade que re-exporta todos os pacotes, mantendo a API `createMercadoLivre`/`MercadoLivre`.
-- Testes unificados na raiz via Vitest com aliases para o `src` dos pacotes; build com ordem topológica explícita.
+- Testes unificados na raiz via Vitest com aliases para o `src` dos pacotes; build com ordem topológica explícita (errors → core → http → types → auth → resources → sdk).
