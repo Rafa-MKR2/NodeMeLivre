@@ -1,0 +1,29 @@
+{
+  "name": "nodemelivre-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "NodeMeLivre: SDK TypeScript modular para a API do Mercado Livre",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "scripts": {
+    "build": "npm run build --workspace @nodemelivre/sdk",
+    "test": "npm run test --workspace @nodemelivre/sdk",
+    "test:watch": "npm run test:watch --workspace @nodemelivre/sdk",
+    "typecheck": "npm run typecheck --workspace @nodemelivre/sdk",
+    "lint": "biome check .",
+    "format": "biome format --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true
+  }
+}
