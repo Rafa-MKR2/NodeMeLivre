@@ -19,7 +19,7 @@ export interface OrderItem {
   sale_fee: number
 }
 
-export type OrderStatus = 'confirmed' | 'payment_required' | 'cancelled' | 'invalid'
+export type OrderStatus = 'confirmed' | 'payment_required' | 'cancelled' | 'invalid' | 'paid'
 
 export type PaymentStatus =
   | 'approved'
