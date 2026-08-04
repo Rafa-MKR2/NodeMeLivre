@@ -25,3 +25,13 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 - Caminho padrão de persistência de token alterado de `~/.mlibre/` para `~/.nodemelivre/`.
 - README, LICENSE (MIT), CONTRIBUTING e templates `.github/` adicionados seguindo o padrão da casa.
 - CI com lint, typecheck, testes, build e validação de Conventional Commits.
+
+### Adicionado (arquitetura modular — ADR-0005)
+
+- Monorepo quebrado em pacotes por domínio, cada um publicável de forma independente:
+  - `@nodemelivre/core` — HTTP (retry, rate limit, timeout), erros tipados, logger, transport e test-utils.
+  - `@nodemelivre/types` — tipos de domínio (item, order, user, shipment, question).
+  - `@nodemelivre/auth` — OAuth2, `TokenManager`, `TokenStore`.
+  - `@nodemelivre/items`, `@nodemelivre/orders`, `@nodemelivre/users`, `@nodemelivre/shipments`, `@nodemelivre/questions`.
+  - `@nodemelivre/sdk` — facade que re-exporta todos os pacotes, mantendo a API `createMercadoLivre`/`MercadoLivre`.
+- Testes unificados na raiz via Vitest com aliases para o `src` dos pacotes; build com ordem topológica explícita.
