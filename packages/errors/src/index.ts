@@ -129,6 +129,14 @@ export class WebhookError extends MercadoLivreError {
   }
 }
 
+/** Erro de configuração do SDK (ex.: credenciais ausentes). */
+export class ConfigurationError extends MercadoLivreError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'ConfigurationError'
+  }
+}
+
 function parseRetryAfter(headers: Headers): number | undefined {
   const raw = headers.get('retry-after')
   if (!raw) return undefined
@@ -143,7 +151,30 @@ function parseRequestId(headers: Headers): string | undefined {
 
 function errorMessageFor(status: number, apiMessage: unknown): string {
   if (typeof apiMessage === 'string' && apiMessage.length > 0) return apiMessage
-  return `O Mercado Livre respondeu com status ${status}`
+
+  // Mensagens amigáveis para status comuns
+  switch (status) {
+    case 400:
+      return 'Requisição inválida — verifique os parâmetros enviados'
+    case 401:
+      return 'Não autorizado — token expirado ou inválido. Faça login novamente.'
+    case 403:
+      return 'Acesso negado — a aplicação não tem permissão para este recurso'
+    case 404:
+      return 'Recurso não encontrado — verifique o ID informado'
+    case 422:
+      return 'Dados inválidos — a API rejeitou o payload enviado'
+    case 429:
+      return 'Muitas requisições — aguarde antes de tentar novamente (rate limit)'
+    case 500:
+      return 'Erro interno do Mercado Livre — tente novamente mais tarde'
+    case 502:
+    case 503:
+    case 504:
+      return 'Serviço indisponível — o Mercado Livre está instável'
+    default:
+      return `O Mercado Livre respondeu com status ${status}`
+  }
 }
 
 /** Mapeia uma resposta HTTP não-2xx para o erro tipado correspondente. */

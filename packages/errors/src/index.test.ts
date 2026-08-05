@@ -57,6 +57,6 @@ describe('toApiError', () => {
 
   it('deve usar mensagem padrão quando a API não devolve message', () => {
     const err = toApiError(500, {}, headers())
-    expect(err.message).toBe('O Mercado Livre respondeu com status 500')
+    expect(err.message).toBe('Erro interno do Mercado Livre — tente novamente mais tarde')
   })
 })

@@ -8,6 +8,7 @@ import {
   type TokenStore,
 } from '@nodemelivre/auth'
 import type { Logger } from '@nodemelivre/core'
+import { ConfigurationError } from '@nodemelivre/errors'
 import {
   HttpClient,
   type HttpClientOptions,
@@ -82,6 +83,10 @@ export class MercadoLivre {
   readonly webhooks: Webhooks
 
   constructor(options: MercadoLivreOptions) {
+    if (!options.clientId || !options.clientSecret) {
+      throw new ConfigurationError('SDK não configurado. Defina ML_CLIENT_ID e ML_CLIENT_SECRET.')
+    }
+
     const oauthOptions: OAuthOptions = {
       clientId: options.clientId,
       clientSecret: options.clientSecret,

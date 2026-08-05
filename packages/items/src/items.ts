@@ -1,4 +1,10 @@
-import { type PageFetcher, paginate, type ResourceTransport, toQuery } from '@nodemelivre/core'
+import {
+  deepOmitEmpty,
+  type PageFetcher,
+  paginate,
+  type ResourceTransport,
+  toQuery,
+} from '@nodemelivre/core'
 import type {
   Item,
   ItemDescription,
@@ -24,12 +30,12 @@ export class Items {
 
   /** Cria um anúncio novo. */
   create(input: ItemInput): Promise<Item> {
-    return this.transport.post('/items', input)
+    return this.transport.post('/items', deepOmitEmpty(input))
   }
 
   /** Atualiza campos do anúncio. */
   update(itemId: string, changes: Partial<ItemInput>): Promise<Item> {
-    return this.transport.put(`/items/${itemId}`, changes)
+    return this.transport.put(`/items/${itemId}`, deepOmitEmpty(changes))
   }
 
   /** Substitui a descrição do anúncio. */
