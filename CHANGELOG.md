@@ -4,6 +4,23 @@ Todas as mudanças notáveis do monorepo serão documentadas neste arquivo.
 
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto adere ao [SemVer](https://semver.org/lang/pt-BR/). Veja o [processo de release](docs/releases/README.md).
 
+## [0.4.0] - 2026-08-05
+
+### Adicionado
+
+- **`@nodemelivre/webhooks`** — notificações do Mercado Livre:
+  - `Webhooks.parse(payload)` — converte o corpo do callback em `WebhookNotification` tipado, validando `resource`/`user_id`/`topic` e o tópico conhecido.
+  - `Webhooks.verify(payload, applicationId)` — autentica a notificação conferindo o `application_id` da sua aplicação (o ML **não** usa assinatura HMAC, ao contrário do Mercado Pago). Lança `WebhookError`.
+  - `WebhookError` em `@nodemelivre/errors`.
+- **`@nodemelivre/messages`** — chat pós-venda (`tag=post_sale`):
+  - `Messages.list(packId, sellerId, { markAsRead? })` → `GET /messages/packs/{packId}/sellers/{sellerId}`.
+  - `Messages.get(messageId)` → `GET /messages/{messageId}` (o `resource` do webhook de mensagem é um hash usado aqui).
+  - `Messages.send({ from, to, text })` → `POST /messages` (máx. 350 caracteres).
+- Tipos de domínio: `WebhookNotification`/`WebhookTopic`/`WebhookMessageAction` e `Message`/`MessageSendInput`/`MessageUser`/`MessageRecipient`/`MessageAttachment`.
+- ADR-0011 (webhooks e messages).
+- Exemplo `examples/webhooks-e-messages.ts`.
+- 100 testes (Vitest) — 14 novos (webhooks parse/verify, messages list/get/send).
+
 ## [0.3.0] - 2026-08-05
 
 ### Adicionado

@@ -121,6 +121,14 @@ export class PollingTimeoutError extends MercadoLivreError {
   }
 }
 
+/** Payload de notificação inválido ou que não pertence a esta aplicação. */
+export class WebhookError extends MercadoLivreError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'WebhookError'
+  }
+}
+
 function parseRetryAfter(headers: Headers): number | undefined {
   const raw = headers.get('retry-after')
   if (!raw) return undefined

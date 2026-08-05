@@ -16,10 +16,12 @@ import {
 } from '@nodemelivre/http'
 import { Images } from '@nodemelivre/images'
 import { Items } from '@nodemelivre/items'
+import { Messages } from '@nodemelivre/messages'
 import { Orders } from '@nodemelivre/orders'
 import { Questions } from '@nodemelivre/questions'
 import { Shipments } from '@nodemelivre/shipments'
 import { Users } from '@nodemelivre/users'
+import { Webhooks } from '@nodemelivre/webhooks'
 
 export * from '@nodemelivre/auth'
 export * from '@nodemelivre/core'
@@ -27,11 +29,13 @@ export * from '@nodemelivre/errors'
 export * from '@nodemelivre/http'
 export * from '@nodemelivre/images'
 export * from '@nodemelivre/items'
+export * from '@nodemelivre/messages'
 export * from '@nodemelivre/orders'
 export * from '@nodemelivre/questions'
 export * from '@nodemelivre/shipments'
 export * from '@nodemelivre/types'
 export * from '@nodemelivre/users'
+export * from '@nodemelivre/webhooks'
 
 export interface MercadoLivreOptions {
   /** App ID da aplicação no Mercado Livre. */
@@ -69,11 +73,13 @@ export class MercadoLivre {
   readonly http: HttpClient
 
   readonly items: Items
+  readonly messages: Messages
   readonly orders: Orders
   readonly users: Users
   readonly shipments: Shipments
   readonly questions: Questions
   readonly images: Images
+  readonly webhooks: Webhooks
 
   constructor(options: MercadoLivreOptions) {
     const oauthOptions: OAuthOptions = {
@@ -109,11 +115,13 @@ export class MercadoLivre {
     this.http = new HttpClient(httpOptions)
 
     this.items = new Items(this.http)
+    this.messages = new Messages(this.http)
     this.orders = new Orders(this.http)
     this.users = new Users(this.http)
     this.shipments = new Shipments(this.http)
     this.questions = new Questions(this.http)
     this.images = new Images(this.http)
+    this.webhooks = new Webhooks()
   }
 
   /** URL para redirecionar o vendedor ao navegador de autorização. */
