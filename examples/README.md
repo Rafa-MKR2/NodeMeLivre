@@ -23,3 +23,4 @@ ML_CLIENT_ID=... ML_CLIENT_SECRET=... npx tsx examples/quickstart.ts
 | [retry-and-rate-limit.ts](retry-and-rate-limit.ts) | Configuração de retry, timeout e observação de rate-limit |
 | [events.ts](events.ts) | Observabilidade: logs de request/response/retry/error/rateLimit e tokenRefreshed |
 | [upload-e-variacoes.ts](upload-e-variacoes.ts) | Upload de imagem e criação de anúncio com variações |
+| [nivel-3-paginacao.ts](nivel-3-paginacao.ts) | Paginação assíncrona, publish/pause e waitUntilPaid |

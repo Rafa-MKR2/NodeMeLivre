@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "@nodemelivre/core": "*",
+    "@nodemelivre/errors": "*",
     "@nodemelivre/types": "*"
   }
 }
