@@ -20,12 +20,12 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 
 | Feature | Dificuldade | Tempo | Status |
 |---|---|---|---|
-| **Eventos** (`ml.on('request' \| 'response' \| 'retry' \| 'tokenRefreshed' \| 'rateLimit' \| 'error')`) | Média | 2 dias | 🚧 Em andamento |
+| **Eventos** (`ml.on('request' \| 'response' \| 'retry' \| 'tokenRefreshed' \| 'rateLimit' \| 'error')`) | Média | 2 dias | ✔ Concluído |
 | **Paginação assíncrona** (`for await (const item of ml.items.list(params))`) | Média | 2 dias | ⏳ Planejado |
 | **Upload de imagens** (`ml.images.upload(file)`) | Média | 2 dias | ⏳ Planejado |
 | **Webhooks** (`ml.webhooks.verify(payload, signature)`, `ml.webhooks.parse(payload)`) | Média | 3 dias | ⏳ Planejado |
 | **PKCE** no fluxo OAuth2 | Média | 2 dias | ⏳ Planejado |
-| **MockTransport** para testes (testar sem chamar ML) | Baixa | 1 dia | 🚧 Em andamento |
+| **MockTransport** para testes (testar sem chamar ML) | Baixa | 1 dia | ✔ Concluído |
 
 > **Observabilidade** é o diferencial: quando alguém abrir issue "o refresh não funcionou", eventos valem ouro para depuração.
 
