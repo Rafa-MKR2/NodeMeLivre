@@ -4,9 +4,7 @@
   <img src="assets/banner.png" alt="NodeMeLivre" width="100%" />
 </p>
 
-<p align="center">
-  <img src="assets/logo.png" alt="NodeMeLivre Logo" width="180" />
-</p>
+
 
 **SDK TypeScript oficial para a API do Mercado Livre** — simples, tipado e pronto para produção.
 
