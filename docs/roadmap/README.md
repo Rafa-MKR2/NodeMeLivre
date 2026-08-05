@@ -28,7 +28,7 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | Arquitetura modular (ADR-0005) em 9 pacotes | Alta | Alta | 5 dias | ✔ Concluído |
 | Paginação com `for await` (`ml.items.list()`) | Alta | Média | 2 dias | ⏳ Planejado |
 | Operações nível 3 (`publish`, `pause`, `waitUntilPaid`, `reply`) | Alta | Média | 3 dias | ⏳ Planejado |
-| Eventos (`tokenRefreshed`, `rateLimit`, `request`, `response`, `error`) | Média | Média | 2 dias | ⏳ Planejado |
+| Eventos (`tokenRefreshed`, `rateLimit`, `request`, `response`, `error`) | Média | Média | 2 dias | 🚧 Em andamento |
 | Upload de imagens (`ml.images.upload(file)`) | Média | Média | 2 dias | ⏳ Planejado |
 | Webhooks (`verify`, `parse`) | Média | Média | 3 dias | ⏳ Planejado |
 | PKCE no fluxo OAuth2 | Média | Média | 2 dias | ⏳ Planejado |

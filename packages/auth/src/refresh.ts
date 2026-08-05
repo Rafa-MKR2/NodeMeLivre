@@ -1,6 +1,12 @@
+import { EventEmitter } from 'node:events'
 import { type Logger, OAuthError, silentLogger, type TokenProvider } from '@nodemelivre/core'
 import type { OAuthClient } from './oauth.js'
 import type { AccessToken, TokenStore } from './token.js'
+
+export interface TokenManagerEvents {
+  /** Emitido quando o token é renovado com sucesso. */
+  tokenRefreshed: [token: AccessToken]
+}
 
 export interface TokenManagerOptions {
   oauth: OAuthClient
@@ -19,7 +25,7 @@ const DEFAULT_LEEWAY_MS = 60_000
  * automaticamente antes de expirar e após um 401. É o `TokenProvider`
  * que o HttpClient usa para montar o header Authorization.
  */
-export class TokenManager implements TokenProvider {
+export class TokenManager extends EventEmitter<TokenManagerEvents> implements TokenProvider {
   private readonly oauth: OAuthClient
   private readonly store: TokenStore
   private readonly leewayMs: number
@@ -28,6 +34,7 @@ export class TokenManager implements TokenProvider {
   private refreshing: Promise<void> | null = null
 
   constructor(options: TokenManagerOptions) {
+    super()
     this.oauth = options.oauth
     this.store = options.store
     this.leewayMs = options.leewayMs ?? DEFAULT_LEEWAY_MS
@@ -87,6 +94,7 @@ export class TokenManager implements TokenProvider {
     this.logger.debug({ userId: token.userId }, 'renovando token de acesso')
     const fresh = await this.oauth.refresh(token.refreshToken)
     await this.store.set(fresh)
+    this.emit('tokenRefreshed', fresh)
   }
 
   private isExpiring(token: AccessToken): boolean {

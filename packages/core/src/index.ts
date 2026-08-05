@@ -1,5 +1,6 @@
 export * from './errors/index.js'
 export type {
+  HttpClientEvents,
   HttpClientOptions,
   HttpClientRequest,
   HttpMethod,
