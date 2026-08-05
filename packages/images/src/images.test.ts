@@ -35,4 +35,26 @@ describe('Images', () => {
 
     expect(transport.calls[0]?.body).toBeInstanceOf(FormData)
   })
+
+  it('deve aceitar Uint8Array como fonte da imagem', async () => {
+    const transport = fakeTransport(() => uploaded)
+    await new Images(transport).upload(new Uint8Array([1, 2, 3]))
+    expect(transport.calls[0]?.body).toBeInstanceOf(FormData)
+  })
+
+  it('deve aceitar ArrayBuffer como fonte da imagem', async () => {
+    const transport = fakeTransport(() => uploaded)
+    await new Images(transport).upload(new ArrayBuffer(8))
+    expect(transport.calls[0]?.body).toBeInstanceOf(FormData)
+  })
+
+  it('deve usar nome padrão com extensão quando filename não é informado', async () => {
+    const transport = fakeTransport(() => uploaded)
+    await new Images(transport).upload(new Blob(['x']))
+
+    const call = transport.calls[0]
+    expect(call).toBeDefined()
+    const file = (call?.body as FormData).get('file') as File
+    expect(file.name).toBe('image.bin')
+  })
 })

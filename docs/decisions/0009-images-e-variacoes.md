@@ -16,7 +16,15 @@ Como adicionar upload de arquivos e variações sem quebrar a arquitetura modula
 
 ### Resource `@nodemelivre/images`
 
-Novo pacote por domínio seguindo ADR-0004/0005, com `Images.upload(file: Blob | Buffer)` que monta um `FormData` e posta em `/pictures/items/upload` via multipart. Retorna `ImageUploadResponse` (id + variações de tamanho no CDN).
+Novo pacote por domínio seguindo ADR-0004/0005, com `Images.upload(file: UploadSource)` que monta um `FormData` e posta em `/pictures/items/upload` via multipart. Retorna `ImageUploadResponse` (id + variações de tamanho no CDN).
+
+O tipo de entrada é um **alias** em `@nodemelivre/types`:
+
+```ts
+type UploadSource = Blob | Buffer | Uint8Array | ArrayBuffer
+```
+
+Um alias dedicado permite estender os formatos suportados (ex.: `File`, `ReadableStream`, `fs.ReadStream`) sem quebrar a API pública — basta ampliar a união. O nome padrão do arquivo é `image.bin` (com extensão, para melhor interoperabilidade com servidores de upload).
 
 ### Suporte a multipart no `HttpClient`
 
