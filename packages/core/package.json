@@ -27,7 +27,6 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "publishConfig": {
-    "access": "public",
-    "registry": "https://registry.npmjs.org/"
+    "registry": "https://npm.pkg.github.com/"
   }
 }
