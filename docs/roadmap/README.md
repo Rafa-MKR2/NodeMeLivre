@@ -4,9 +4,9 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 
 ## Estratégia de releases
 
-| Versão | Escopo | Objetivo |
-|---|---|---|
-| **v0.1.0** | Base estável (monorepo, HTTP, OAuth2, TokenStore, 5 resources) | Publicar núcleo sólido; feedback inicial |
+| Versão | Escopo | Objetivo | Status |
+|---|---|---|---|
+| **v0.1.0** | Base estável (monorepo, HTTP, OAuth2, TokenStore, 5 resources) | Publicar núcleo sólido; feedback inicial | ✔ Publicado 2026-08-04 |
 | **v0.2.x** | Paginação assíncrona, eventos, operações nível 3 | Ergonomia: `for await`, `ml.on(...)`, `ml.items.publish()` |
 | **v0.3.x** | Upload de imagens, webhooks `verify/parse`, PKCE | Recursos de plataforma |
 | **v0.4.x** | Resources extras: payments, messages, billing | Cobertura de API |
