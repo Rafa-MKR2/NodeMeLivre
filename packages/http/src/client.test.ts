@@ -181,4 +181,25 @@ describe('HttpClient.request', () => {
     const result = await client().delete<undefined>('/items/MLB1')
     expect(result).toBeUndefined()
   })
+
+  it('deve devolver ArrayBuffer com responseType arraybuffer', async () => {
+    const pdf = new Uint8Array([37, 80, 68, 70]) // "%PDF"
+    const spy = vi.fn(async () => new Response(pdf, { status: 200 }))
+    vi.stubGlobal('fetch', spy)
+
+    const result = await client().get<ArrayBuffer>('/shipment_labels', {
+      responseType: 'arraybuffer',
+    })
+
+    expect(result).toBeInstanceOf(ArrayBuffer)
+    expect(new Uint8Array(result)).toEqual(pdf)
+  })
+
+  it('deve devolver texto com responseType text', async () => {
+    const spy = vi.fn(async () => new Response('conteúdo plano', { status: 200 }))
+    vi.stubGlobal('fetch', spy)
+
+    const result = await client().get<string>('/endpoint', { responseType: 'text' })
+    expect(result).toBe('conteúdo plano')
+  })
 })

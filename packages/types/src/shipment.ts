@@ -10,6 +10,9 @@ export type ShipmentStatus =
 
 export type ShippingType = 'custom' | 'me1' | 'me2' | 'me3'
 
+/** Formato da etiqueta de envio. */
+export type ShipmentLabelFormat = 'pdf' | 'zpl2'
+
 export interface ShipmentAddress {
   id?: number
   address_line: string

@@ -28,4 +28,9 @@ export class Questions {
       text: input.text,
     })
   }
+
+  /** Responde uma pergunta e a marca como respondida (alias de `answer`). */
+  reply(questionId: number | string, text: string): Promise<QuestionAnswer> {
+    return this.answer({ questionId: Number(questionId), text })
+  }
 }

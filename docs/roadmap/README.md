@@ -36,12 +36,12 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 
 | Feature | Dificuldade | Tempo | Status |
 |---|---|---|---|
-| **Operações nível 3** — compostas que economizam horas | Média | 3 dias | 🚧 Parcial |
-| `ml.items.publish(input)` → cria + ativa + publica | | | ⏳ Pendente |
+| **Operações nível 3** — compostas que economizam horas | Média | 3 dias | ✔ Concluído |
+| `ml.items.createAndPublish(input)` → cria + publica | | | ✔ Concluído |
 | `ml.items.pause(id)` → pausa anúncio | | | ✔ Concluído |
 | `ml.orders.waitUntilPaid(orderId, timeout?)` → polling com backoff | | | ✔ Concluído |
-| `ml.questions.reply(questionId, text)` → responde + marca lida | | | ⏳ Pendente |
-| `ml.shipments.printLabel(shipmentId)` → gera + baixa label | | | ⏳ Pendente |
+| `ml.questions.reply(questionId, text)` → responde + marca lida | | | ✔ Concluído |
+| `ml.shipments.printLabel(shipmentId)` → gera + baixa label (PDF/ZPL) | | | ✔ Concluído |
 | **Webhooks** (`ml.webhooks.parse(payload)`, `ml.webhooks.verify(payload, applicationId)`) | Média | 3 dias | ✔ Concluído |
 | **Messages** (`ml.messages.list/get/send` — chat de comprador) | Média | 3 dias | ✔ Concluído |
 
@@ -103,6 +103,18 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | `@nodemelivre/messages` — `Messages.list/get/send` (chat pós-venda, `tag=post_sale`) | ✔ |
 | `WebhookError` em `@nodemelivre/errors` | ✔ |
 | ADR-0011 (webhooks + messages) | ✔ |
+
+## Concluído (v0.4.1 — nível 3 completo)
+
+| Feature | Status |
+|---|---|
+| `Items.createAndPublish(input)` — cria + publica anúncio | ✔ |
+| `Questions.reply(questionId, text)` — responde + marca respondida | ✔ |
+| `Shipments.printLabel(ids, { format: 'pdf' \| 'zpl2' })` → `ArrayBuffer` | ✔ |
+| `responseType` (`json`/`text`/`arraybuffer`) no transport/HttpClient | ✔ |
+| ADR-0012 (operações nível 3) | ✔ |
+
+## Prioridade B concluída — v1.0 desbloqueada
 
 ---
 
