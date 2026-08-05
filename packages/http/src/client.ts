@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { type Logger, silentLogger } from '@nodemelivre/core'
 import { ApiError, NetworkError, RateLimitError, toApiError } from '@nodemelivre/errors'
 import type { RateLimiter } from './rate-limit.js'
@@ -11,6 +12,20 @@ import {
 export const MERCADO_LIVRE_BASE_URL = 'https://api.mercadolibre.com'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD'
+
+/** Eventos emitidos pelo HttpClient. */
+export interface HttpClientEvents {
+  /** Emitido antes de enviar a requisição. */
+  request: [request: HttpClientRequest]
+  /** Emitido ao receber resposta (sucesso ou erro). */
+  response: [response: Response, request: HttpClientRequest]
+  /** Emitido quando uma tentativa de retry vai ocorrer. */
+  retry: [attempt: number, error: unknown, request: HttpClientRequest]
+  /** Emitido quando ocorre um erro (rede ou API). */
+  httpError: [error: Error, request: HttpClientRequest]
+  /** Emitido quando rate limit é atingido e aguarda. */
+  rateLimit: [resetAt: number, request: HttpClientRequest]
+}
 
 /** Fonte de token para autenticação das requisições. */
 export interface TokenProvider {
@@ -53,7 +68,7 @@ export interface HttpClientOptions {
 
 const JSON_CONTENT_TYPE = 'application/json'
 
-export class HttpClient {
+export class HttpClient extends EventEmitter<HttpClientEvents> {
   private readonly baseUrl: string
   private readonly defaultTimeoutMs: number
   private readonly defaultHeaders: Record<string, string>
@@ -65,6 +80,7 @@ export class HttpClient {
   private readonly rateLimiter: RateLimiter | undefined
 
   constructor(options: HttpClientOptions = {}) {
+    super()
     this.baseUrl = options.baseUrl ?? MERCADO_LIVRE_BASE_URL
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 30_000
     this.defaultHeaders = options.defaultHeaders ?? {}
@@ -123,8 +139,19 @@ export class HttpClient {
     let headers = this.buildHeaders(request.headers, token)
     let refreshed = false
 
+    // Emit request event
+    this.emit('request', request)
+
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (this.rateLimiter !== undefined) {
+        const state = this.rateLimiter.stateOf(request.path)
+        if (
+          state?.remaining !== undefined &&
+          state.remaining === 0 &&
+          state.resetAt !== undefined
+        ) {
+          this.emit('rateLimit', state.resetAt, request)
+        }
         await this.rateLimiter.waitIfNeeded(request.path)
       }
 
@@ -141,10 +168,12 @@ export class HttpClient {
       } catch (error) {
         this.logger.debug({ err: error, url: url.toString() }, 'falha de rede')
         const networkError = new NetworkError('Falha ao comunicar com o Mercado Livre', error)
+        this.emit('httpError', networkError, request)
         if (
           attempt < maxAttempts - 1 &&
           defaultShouldRetry({ attempt, method, status: undefined, error })
         ) {
+          this.emit('retry', attempt, networkError, request)
           await this.delay(exponentialBackoff(attempt, this.retry))
           continue
         }
@@ -155,6 +184,9 @@ export class HttpClient {
         this.rateLimiter.update(request.path, response.headers)
       }
 
+      // Emit response event for all responses
+      this.emit('response', response, request)
+
       if (response.ok) {
         return (await parseBody(response)) as T
       }
@@ -162,6 +194,7 @@ export class HttpClient {
       const body = await tryReadBody(response)
       const apiError = toApiError(response.status, body, response.headers)
       this.logger.debug({ err: apiError, url: url.toString() }, 'erro da api')
+      this.emit('httpError', apiError, request)
 
       // 401 com refresh disponível: renova o token e tenta de novo uma única vez.
       if (apiError.status === 401 && !refreshed && this.auth?.refresh !== undefined) {
@@ -178,6 +211,7 @@ export class HttpClient {
         attempt < maxAttempts - 1 &&
         defaultShouldRetry({ attempt, method, status: apiError.status, error: apiError })
       ) {
+        this.emit('retry', attempt, apiError, request)
         await this.delay(this.backoffDelay(attempt, apiError))
         continue
       }

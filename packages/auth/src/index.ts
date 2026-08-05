@@ -1,6 +1,6 @@
 export type { AuthorizationUrlOptions, OAuthOptions, TokenGrantOptions } from './oauth.js'
 export { OAuthClient } from './oauth.js'
-export type { TokenManagerOptions } from './refresh.js'
+export type { TokenManagerEvents, TokenManagerOptions } from './refresh.js'
 export { TokenManager } from './refresh.js'
 export type { AccessToken, TokenStore } from './token.js'
 export { FileTokenStore, InMemoryTokenStore } from './token.js'
