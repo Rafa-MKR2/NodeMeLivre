@@ -7,13 +7,13 @@ import {
   type TokenManagerOptions,
   type TokenStore,
 } from '@nodemelivre/auth'
+import type { Logger } from '@nodemelivre/core'
 import {
   HttpClient,
   type HttpClientOptions,
-  type Logger,
   RateLimiter,
   type RetryOptions,
-} from '@nodemelivre/core'
+} from '@nodemelivre/http'
 import { Items } from '@nodemelivre/items'
 import { Orders } from '@nodemelivre/orders'
 import { Questions } from '@nodemelivre/questions'

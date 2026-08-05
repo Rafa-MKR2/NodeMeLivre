@@ -1,5 +1,6 @@
-import { type HttpClient, OAuthError } from '@nodemelivre/core'
 import { json, mockFetch, restoreFetch } from '@nodemelivre/core/test-utils'
+import { OAuthError } from '@nodemelivre/errors'
+import type { HttpClient } from '@nodemelivre/http'
 import { afterEach, describe, expect, it } from 'vitest'
 import { OAuthClient } from './oauth.js'
 

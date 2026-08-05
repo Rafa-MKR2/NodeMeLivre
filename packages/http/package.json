@@ -1,0 +1,29 @@
+{
+  "name": "@nodemelivre/http",
+  "version": "0.1.0",
+  "description": "Cliente HTTP com retry, rate limit e timeout do NodeMeLivre",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@nodemelivre/core": "*",
+    "@nodemelivre/errors": "*"
+  }
+}
