@@ -8,8 +8,8 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 |---|---|---|---|
 | **v0.1.0** | Base estável (monorepo, HTTP, OAuth2, TokenStore, 5 resources) | Publicar núcleo sólido; feedback inicial | ✔ Publicado 2026-08-04 |
 | **v0.2.x** | Upload de imagens + variações em itens | Destravar a criação real de anúncios (foto + SKU) | ✔ Concluído |
-| **v0.3.x** | Paginação assíncrona + operações nível 3 | Ergonomia: `for await`, `publish`, `pause`, `waitUntilPaid` | ⏳ Próximo |
-| **v0.4.x** | Webhooks (`verify`/`parse`) + `messages` | Notificação em tempo real e chat de comprador | ⏳ Planejado |
+| **v0.3.x** | Paginação assíncrona + operações nível 3 | Ergonomia: `for await`, `publish`, `pause`, `waitUntilPaid` | ✔ Concluído |
+| **v0.4.x** | Webhooks (`verify`/`parse`) + `messages` | Notificação em tempo real e chat de comprador | ⏳ Próximo |
 | **v1.0.0** | API pública consolidada, docs completas, estabilidade | Marco de produção | ⏳ Planejado |
 
 > **Critério de "versão sólida" (v1.0):** o integrador consegue, de ponta a ponta, autenticar, criar anúncio com foto e variação, paginar buscas, acompanhar vendas/perguntas/envios em tempo real e operar por chat — sem workaround manual.
@@ -24,7 +24,7 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 |---|---|---|---|
 | **Upload de imagens** (`ml.images.upload(file)`) | Média | 2 dias | ✔ Concluído |
 | **Variações em itens** (`ItemInput.variations`, SKU/tamanho/cor) | Média | 2 dias | ✔ Concluído |
-| **Paginação assíncrona** (`for await (const item of ml.items.list(params))`) | Média | 2 dias | ⏳ Planejado |
+| **Paginação assíncrona** (`for await (const item of ml.items.list(params))`) | Média | 2 dias | ✔ Concluído |
 | **Eventos** (`ml.on('request' \| 'response' \| 'retry' \| 'tokenRefreshed' \| 'rateLimit' \| 'error')`) | Média | 2 dias | ✔ Concluído |
 | **MockTransport** para testes (testar sem chamar ML) | Baixa | 1 dia | ✔ Concluído |
 
@@ -32,16 +32,16 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 
 ---
 
-## Prioridade B — Produção (v0.3 → v0.4)
+## Prioridade B — Produção (v0.4)
 
 | Feature | Dificuldade | Tempo | Status |
 |---|---|---|---|
-| **Operações nível 3** — compostas que economizam horas | Média | 3 dias | ⏳ Planejado |
-| `ml.items.publish(input)` → cria + ativa + publica | | | |
-| `ml.items.pause(id)` → pausa anúncio | | | |
-| `ml.orders.waitUntilPaid(orderId, timeout?)` → polling com backoff | | | |
-| `ml.questions.reply(questionId, text)` → responde + marca lida | | | |
-| `ml.shipments.printLabel(shipmentId)` → gera + baixa label | | | |
+| **Operações nível 3** — compostas que economizam horas | Média | 3 dias | 🚧 Parcial |
+| `ml.items.publish(input)` → cria + ativa + publica | | | ⏳ Pendente |
+| `ml.items.pause(id)` → pausa anúncio | | | ✔ Concluído |
+| `ml.orders.waitUntilPaid(orderId, timeout?)` → polling com backoff | | | ✔ Concluído |
+| `ml.questions.reply(questionId, text)` → responde + marca lida | | | ⏳ Pendente |
+| `ml.shipments.printLabel(shipmentId)` → gera + baixa label | | | ⏳ Pendente |
 | **Webhooks** (`ml.webhooks.verify(payload, signature)`, `ml.webhooks.parse(payload)`) | Média | 3 dias | ⏳ Planejado |
 | **Messages** (`ml.messages.list/get/send` — chat de comprador) | Média | 3 dias | ⏳ Planejado |
 
@@ -85,6 +85,15 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | Suporte a `FormData`/multipart no `HttpClient` | ✔ |
 | Variações em itens (`ItemVariation`, `ItemVariationInput`) | ✔ |
 | ADR-0009 (images + variações) | ✔ |
+
+## Concluído (v0.3)
+
+| Feature | Status |
+|---|---|
+| `paginate()` no core + `Items.list()` (`for await`) | ✔ |
+| `Items.publish` / `Items.pause` (aliases de status) | ✔ |
+| `Orders.waitUntilPaid()` + `PollingTimeoutError` | ✔ |
+| ADR-0010 (paginação + nível 3) | ✔ |
 
 ---
 

@@ -4,6 +4,23 @@ Todas as mudanças notáveis do monorepo serão documentadas neste arquivo.
 
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto adere ao [SemVer](https://semver.org/lang/pt-BR/). Veja o [processo de release](docs/releases/README.md).
 
+## [0.3.0] - 2026-08-05
+
+### Adicionado
+
+- **Paginação assíncrona** — helper `paginate()` em `@nodemelivre/core`: async generator genérico que itera item a item sobre uma busca paginada, avançando o `offset` automaticamente e suportando `break` para parada antecipada.
+- `Items.list(siteId, params)` — percorre todos os resultados de uma busca:
+  ```ts
+  for await (const item of ml.items.list('MLB', { q: 'fone' })) {
+    console.log(item.title)
+  }
+  ```
+- Operações nível 3:
+  - `Items.publish(itemId)` / `Items.pause(itemId)` — aliases tipados de `updateStatus`.
+  - `Orders.waitUntilPaid(orderId, { timeoutMs?, intervalMs? })` — polling até o pedido ficar `paid`, com `PollingTimeoutError` em `@nodemelivre/errors` no estouro de timeout.
+- ADR-0010 (paginação assíncrona e operações nível 3).
+- 86 testes (Vitest) — 9 novos (paginate no core, `list`, `publish`, `pause`, `waitUntilPaid`).
+
 ## [0.2.0] - 2026-08-05
 
 ### Adicionado
