@@ -9,7 +9,12 @@ export interface ResourceRequest {
   headers?: Record<string, string>
   timeoutMs?: number
   signal?: AbortSignal
+  /** Formato esperado do corpo da resposta. Padrão: `json`. */
+  responseType?: ResponseType
 }
+
+/** Formatos de resposta suportados pelo transport. */
+export type ResponseType = 'json' | 'text' | 'arraybuffer'
 
 /** Query params aceitos pelo transport. */
 export type QueryParams = Record<string, string | number | boolean | undefined>

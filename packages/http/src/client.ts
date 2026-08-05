@@ -8,7 +8,6 @@ import {
   exponentialBackoff,
   type RetryOptions,
 } from './retry.js'
-
 export const MERCADO_LIVRE_BASE_URL = 'https://api.mercadolibre.com'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD'
@@ -49,6 +48,8 @@ export interface HttpClientRequest {
   auth?: boolean
   /** Aplica retry (padrão: true). */
   retry?: boolean
+  /** Formato esperado do corpo da resposta. Padrão: `json`. */
+  responseType?: 'json' | 'text' | 'arraybuffer'
 }
 
 export interface HttpClientOptions {
@@ -188,7 +189,7 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
       this.emit('response', response, request)
 
       if (response.ok) {
-        return (await parseBody(response)) as T
+        return (await parseBody(response, request.responseType)) as T
       }
 
       const body = await tryReadBody(response)
@@ -293,8 +294,13 @@ function buildUrl(baseUrl: string, path: string, query: HttpClientRequest['query
   return url
 }
 
-async function parseBody(response: Response): Promise<unknown> {
+async function parseBody(
+  response: Response,
+  responseType: HttpClientRequest['responseType'] = 'json',
+): Promise<unknown> {
   if (response.status === 204) return undefined
+  if (responseType === 'arraybuffer') return response.arrayBuffer()
+  if (responseType === 'text') return response.text()
   const text = await response.text()
   if (text === '') return undefined
   return tryParseJson(text) ?? text

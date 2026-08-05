@@ -109,4 +109,28 @@ describe('Items', () => {
       body: { status: 'paused' },
     })
   })
+
+  it('createAndPublish deve apenas criar quando o item já nasce ativo', async () => {
+    const transport = fakeTransport(() => item)
+    const items = new Items(transport)
+    await items.createAndPublish({ title: 'Produto', price: 10, available_quantity: 5 })
+
+    expect(transport.calls).toHaveLength(1)
+    expect(transport.calls[0]).toMatchObject({ method: 'POST', path: '/items' })
+  })
+
+  it('createAndPublish deve publicar quando o item nasce em outro status', async () => {
+    const transport = fakeTransport((call) =>
+      call?.path === '/items' ? { ...item, status: 'under_review' } : item,
+    )
+    const items = new Items(transport)
+    await items.createAndPublish({ title: 'Produto', price: 10, available_quantity: 5 })
+
+    expect(transport.calls).toHaveLength(2)
+    expect(transport.calls[1]).toMatchObject({
+      method: 'POST',
+      path: '/items/MLB1/status',
+      body: { status: 'active' },
+    })
+  })
 })
