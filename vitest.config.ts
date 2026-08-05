@@ -10,6 +10,7 @@ export default defineConfig({
       '@nodemelivre/core': resolve('packages/core/src/index.ts'),
       '@nodemelivre/errors': resolve('packages/errors/src/index.ts'),
       '@nodemelivre/http': resolve('packages/http/src/index.ts'),
+      '@nodemelivre/images': resolve('packages/images/src/index.ts'),
       '@nodemelivre/types': resolve('packages/types/src/index.ts'),
       '@nodemelivre/auth': resolve('packages/auth/src/index.ts'),
       '@nodemelivre/items': resolve('packages/items/src/index.ts'),

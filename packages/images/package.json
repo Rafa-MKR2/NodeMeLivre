@@ -1,7 +1,7 @@
 {
-  "name": "@nodemelivre/sdk",
-  "version": "0.1.0",
-  "description": "NodeMeLivre: SDK TypeScript modular para a API do Mercado Livre",
+  "name": "@nodemelivre/images",
+  "version": "0.2.0",
+  "description": "Recursos de imagens do NodeMeLivre para a API do Mercado Livre",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -23,16 +23,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@nodemelivre/auth": "*",
     "@nodemelivre/core": "*",
-    "@nodemelivre/errors": "*",
-    "@nodemelivre/http": "*",
-    "@nodemelivre/images": "*",
-    "@nodemelivre/items": "*",
-    "@nodemelivre/orders": "*",
-    "@nodemelivre/questions": "*",
-    "@nodemelivre/shipments": "*",
-    "@nodemelivre/types": "*",
-    "@nodemelivre/users": "*"
+    "@nodemelivre/types": "*"
   }
 }

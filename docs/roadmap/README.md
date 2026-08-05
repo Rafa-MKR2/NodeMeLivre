@@ -7,8 +7,8 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | Versão | Escopo | Objetivo | Status |
 |---|---|---|---|
 | **v0.1.0** | Base estável (monorepo, HTTP, OAuth2, TokenStore, 5 resources) | Publicar núcleo sólido; feedback inicial | ✔ Publicado 2026-08-04 |
-| **v0.2.x** | Upload de imagens + variações em itens | Destravar a criação real de anúncios (foto + SKU) | ⏳ Próximo |
-| **v0.3.x** | Paginação assíncrona + operações nível 3 | Ergonomia: `for await`, `publish`, `pause`, `waitUntilPaid` | ⏳ Planejado |
+| **v0.2.x** | Upload de imagens + variações em itens | Destravar a criação real de anúncios (foto + SKU) | ✔ Concluído |
+| **v0.3.x** | Paginação assíncrona + operações nível 3 | Ergonomia: `for await`, `publish`, `pause`, `waitUntilPaid` | ⏳ Próximo |
 | **v0.4.x** | Webhooks (`verify`/`parse`) + `messages` | Notificação em tempo real e chat de comprador | ⏳ Planejado |
 | **v1.0.0** | API pública consolidada, docs completas, estabilidade | Marco de produção | ⏳ Planejado |
 
@@ -22,8 +22,8 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 
 | Feature | Dificuldade | Tempo | Status |
 |---|---|---|---|
-| **Upload de imagens** (`ml.images.upload(file)`) | Média | 2 dias | ⏳ Planejado |
-| **Variações em itens** (`ItemInput.variations`, SKU/tamanho/cor) | Média | 2 dias | ⏳ Planejado |
+| **Upload de imagens** (`ml.images.upload(file)`) | Média | 2 dias | ✔ Concluído |
+| **Variações em itens** (`ItemInput.variations`, SKU/tamanho/cor) | Média | 2 dias | ✔ Concluído |
 | **Paginação assíncrona** (`for await (const item of ml.items.list(params))`) | Média | 2 dias | ⏳ Planejado |
 | **Eventos** (`ml.on('request' \| 'response' \| 'retry' \| 'tokenRefreshed' \| 'rateLimit' \| 'error')`) | Média | 2 dias | ✔ Concluído |
 | **MockTransport** para testes (testar sem chamar ML) | Baixa | 1 dia | ✔ Concluído |
@@ -76,6 +76,15 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | CI (Biome + typecheck + test + build + conventional commits) | ✔ |
 | Arquitetura modular 11 pacotes (errors, http, core, types, auth, 5 resources, sdk) | ✔ |
 | Disciplina de tipos: unions para enums fechados | ✔ |
+
+## Concluído (v0.2)
+
+| Feature | Status |
+|---|---|
+| `@nodemelivre/images` — resource `Images.upload()` (multipart) | ✔ |
+| Suporte a `FormData`/multipart no `HttpClient` | ✔ |
+| Variações em itens (`ItemVariation`, `ItemVariationInput`) | ✔ |
+| ADR-0009 (images + variações) | ✔ |
 
 ---
 

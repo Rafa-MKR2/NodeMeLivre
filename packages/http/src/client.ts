@@ -247,9 +247,13 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
     const init: RequestInit = { method, headers }
 
     if (body !== undefined) {
-      init.body = JSON.stringify(body)
-      if (!headers.has('content-type')) {
-        headers.set('content-type', JSON_CONTENT_TYPE)
+      if (isBodyInit(body)) {
+        init.body = body as NonNullable<RequestInit['body']>
+      } else {
+        init.body = JSON.stringify(body)
+        if (!headers.has('content-type')) {
+          headers.set('content-type', JSON_CONTENT_TYPE)
+        }
       }
     }
 
@@ -308,4 +312,15 @@ function tryParseJson(text: string): unknown | undefined {
   } catch {
     return undefined
   }
+}
+
+function isBodyInit(body: unknown): boolean {
+  return (
+    typeof body === 'string' ||
+    body instanceof Blob ||
+    body instanceof FormData ||
+    body instanceof URLSearchParams ||
+    body instanceof ArrayBuffer ||
+    ArrayBuffer.isView(body)
+  )
 }

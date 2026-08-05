@@ -4,6 +4,16 @@ Todas as mudanças notáveis do monorepo serão documentadas neste arquivo.
 
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto adere ao [SemVer](https://semver.org/lang/pt-BR/). Veja o [processo de release](docs/releases/README.md).
 
+## [0.2.0] - 2026-08-05
+
+### Adicionado
+
+- `@nodemelivre/images` — novo resource `Images.upload(file)` que envia imagem via multipart para `POST /pictures/items/upload` e retorna `ImageUploadResponse` (id + variações de tamanho no CDN). O `id` pode ser usado em `picture_ids` ao criar itens com variações.
+- Suporte a `FormData`/`Blob`/`BodyInit` no `HttpClient`: body nativo multipart é passado direto ao fetch (sem `JSON.stringify`), preservando o boundary gerado pelo `FormData`.
+- Tipos de variação em `@nodemelivre/types` — `VariationAttribute`, `ItemVariation`, `ItemVariationInput`; `Item.variations` e `ItemInput.variations`.
+- ADR-0009 (resource images e variações de item).
+- 77 testes (Vitest) — 3 novos (upload multipart no resource, FormData direto no client).
+
 ## [0.1.0] - 2026-08-04
 
 ### Adicionado
