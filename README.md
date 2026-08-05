@@ -46,6 +46,7 @@ const search = await ml.items.search('MLB', { q: 'fone bluetooth' })
 
 - **Auth** — OAuth2 (`authorization_code`, `refresh_token`, `credentials`), refresh automático com leeway de 60s, dedupe de chamadas concorrentes, `TokenStore` pluggável (`InMemoryTokenStore`, `FileTokenStore`).
 - **HTTP** — retry com backoff exponencial, timeout via `AbortSignal`, rate limit por recurso (`X-Rate-Limit-*`), injeção de `fetch`.
+- **Events** — `ml.http.on('request'|'response'|'retry'|'httpError'|'rateLimit')`, `ml.tokens.on('tokenRefreshed')` para observabilidade total.
 - **Resources** — `items`, `orders`, `users`, `shipments`, `questions`, todos tipados.
 - **Erros** — `ApiError` tipado por status, `RateLimitError`, `NetworkError`, `OAuthError`.
 - **Tipagem estrita** — `strict: true`, sem `any`.
