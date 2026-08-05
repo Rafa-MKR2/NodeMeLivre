@@ -1,4 +1,4 @@
-import { type ResourceTransport, toQuery } from '@nodemelivre/core'
+import { type PageFetcher, paginate, type ResourceTransport, toQuery } from '@nodemelivre/core'
 import type {
   Item,
   ItemDescription,
@@ -45,5 +45,31 @@ export class Items {
   /** Busca de itens por site. */
   search(siteId: string, params: ItemSearchParams = {}): Promise<ItemSearchResponse> {
     return this.transport.get(`/sites/${siteId}/search`, { query: toQuery(params) })
+  }
+
+  /**
+   * Itera todos os itens de uma busca, página após página, item a item.
+   *
+   * ```ts
+   * for await (const item of ml.items.list('MLB', { q: 'fone' })) {
+   *   console.log(item.title)
+   * }
+   * ```
+   */
+  list(siteId: string, params: ItemSearchParams = {}): AsyncGenerator<Item, void, void> {
+    const fetchPage: PageFetcher<Item> = (offset, limit) =>
+      this.transport.get<ItemSearchResponse>(`/sites/${siteId}/search`, {
+        query: toQuery({ ...params, offset, limit }),
+      })
+    return paginate(fetchPage, params.limit === undefined ? {} : { limit: params.limit })
+  }
+  /** Publica um anúncio (alias de `updateStatus('active')`). */
+  publish(itemId: string): Promise<Item> {
+    return this.updateStatus(itemId, 'active')
+  }
+
+  /** Pausa um anúncio (alias de `updateStatus('paused')`). */
+  pause(itemId: string): Promise<Item> {
+    return this.updateStatus(itemId, 'paused')
   }
 }

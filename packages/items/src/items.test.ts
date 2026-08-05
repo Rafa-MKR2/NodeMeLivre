@@ -69,4 +69,44 @@ describe('Items', () => {
     expect(call?.path).toBe('/sites/MLB/search')
     expect(call?.query).toEqual({ q: 'fone', offset: 20, status: 'active' })
   })
+
+  it('deve iterar itens de todas as páginas com list()', async () => {
+    const pages: Record<
+      number,
+      { results: unknown[]; paging: { total: number; offset: number; limit: number } }
+    > = {
+      0: { results: [item, { ...item, id: 'MLB2' }], paging: { total: 3, offset: 0, limit: 2 } },
+      2: { results: [{ ...item, id: 'MLB3' }], paging: { total: 3, offset: 2, limit: 2 } },
+    }
+    const transport = fakeTransport((call) => pages[Number(call?.query?.offset)] ?? pages[0])
+
+    const ids: string[] = []
+    for await (const i of new Items(transport).list('MLB', { limit: 2 })) {
+      ids.push(i.id)
+    }
+
+    expect(ids).toEqual(['MLB1', 'MLB2', 'MLB3'])
+    expect(transport.calls).toHaveLength(2)
+    expect(transport.calls[1]?.query).toEqual({ limit: 2, offset: 2 })
+  })
+
+  it('deve publicar um anúncio', async () => {
+    const transport = fakeTransport(() => ({ ...item, status: 'active' }))
+    await new Items(transport).publish('MLB1')
+    expect(transport.calls[0]).toMatchObject({
+      method: 'POST',
+      path: '/items/MLB1/status',
+      body: { status: 'active' },
+    })
+  })
+
+  it('deve pausar um anúncio', async () => {
+    const transport = fakeTransport(() => ({ ...item, status: 'paused' }))
+    await new Items(transport).pause('MLB1')
+    expect(transport.calls[0]).toMatchObject({
+      method: 'POST',
+      path: '/items/MLB1/status',
+      body: { status: 'paused' },
+    })
+  })
 })
