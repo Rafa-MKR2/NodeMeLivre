@@ -14,10 +14,12 @@ export default defineConfig({
       '@nodemelivre/types': resolve('packages/types/src/index.ts'),
       '@nodemelivre/auth': resolve('packages/auth/src/index.ts'),
       '@nodemelivre/items': resolve('packages/items/src/index.ts'),
+      '@nodemelivre/messages': resolve('packages/messages/src/index.ts'),
       '@nodemelivre/orders': resolve('packages/orders/src/index.ts'),
       '@nodemelivre/users': resolve('packages/users/src/index.ts'),
       '@nodemelivre/shipments': resolve('packages/shipments/src/index.ts'),
       '@nodemelivre/questions': resolve('packages/questions/src/index.ts'),
+      '@nodemelivre/webhooks': resolve('packages/webhooks/src/index.ts'),
     },
   },
   test: {

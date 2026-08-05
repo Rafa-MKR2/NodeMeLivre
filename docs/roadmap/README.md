@@ -9,7 +9,7 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | **v0.1.0** | Base estável (monorepo, HTTP, OAuth2, TokenStore, 5 resources) | Publicar núcleo sólido; feedback inicial | ✔ Publicado 2026-08-04 |
 | **v0.2.x** | Upload de imagens + variações em itens | Destravar a criação real de anúncios (foto + SKU) | ✔ Concluído |
 | **v0.3.x** | Paginação assíncrona + operações nível 3 | Ergonomia: `for await`, `publish`, `pause`, `waitUntilPaid` | ✔ Concluído |
-| **v0.4.x** | Webhooks (`verify`/`parse`) + `messages` | Notificação em tempo real e chat de comprador | ⏳ Próximo |
+| **v0.4.x** | Webhooks (`parse`/`verify`) + `messages` | Notificação em tempo real e chat de comprador | ✔ Concluído |
 | **v1.0.0** | API pública consolidada, docs completas, estabilidade | Marco de produção | ⏳ Planejado |
 
 > **Critério de "versão sólida" (v1.0):** o integrador consegue, de ponta a ponta, autenticar, criar anúncio com foto e variação, paginar buscas, acompanhar vendas/perguntas/envios em tempo real e operar por chat — sem workaround manual.
@@ -42,8 +42,8 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | `ml.orders.waitUntilPaid(orderId, timeout?)` → polling com backoff | | | ✔ Concluído |
 | `ml.questions.reply(questionId, text)` → responde + marca lida | | | ⏳ Pendente |
 | `ml.shipments.printLabel(shipmentId)` → gera + baixa label | | | ⏳ Pendente |
-| **Webhooks** (`ml.webhooks.verify(payload, signature)`, `ml.webhooks.parse(payload)`) | Média | 3 dias | ⏳ Planejado |
-| **Messages** (`ml.messages.list/get/send` — chat de comprador) | Média | 3 dias | ⏳ Planejado |
+| **Webhooks** (`ml.webhooks.parse(payload)`, `ml.webhooks.verify(payload, applicationId)`) | Média | 3 dias | ✔ Concluído |
+| **Messages** (`ml.messages.list/get/send` — chat de comprador) | Média | 3 dias | ✔ Concluído |
 
 > **Webhooks** habilitam notificação em tempo real (nova venda, pergunta, mensagem) — essencial para rodar em produção.
 
@@ -94,6 +94,15 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | `Items.publish` / `Items.pause` (aliases de status) | ✔ |
 | `Orders.waitUntilPaid()` + `PollingTimeoutError` | ✔ |
 | ADR-0010 (paginação + nível 3) | ✔ |
+
+## Concluído (v0.4)
+
+| Feature | Status |
+|---|---|
+| `@nodemelivre/webhooks` — `Webhooks.parse()` / `Webhooks.verify(payload, applicationId)` (sem HMAC — o ML não assina) | ✔ |
+| `@nodemelivre/messages` — `Messages.list/get/send` (chat pós-venda, `tag=post_sale`) | ✔ |
+| `WebhookError` em `@nodemelivre/errors` | ✔ |
+| ADR-0011 (webhooks + messages) | ✔ |
 
 ---
 

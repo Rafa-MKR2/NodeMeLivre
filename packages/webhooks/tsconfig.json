@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@nodemelivre/errors": ["../errors/src/index.ts"],
+      "@nodemelivre/types": ["../types/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

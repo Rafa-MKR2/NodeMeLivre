@@ -29,10 +29,12 @@
     "@nodemelivre/http": "*",
     "@nodemelivre/images": "*",
     "@nodemelivre/items": "*",
+    "@nodemelivre/messages": "*",
     "@nodemelivre/orders": "*",
     "@nodemelivre/questions": "*",
     "@nodemelivre/shipments": "*",
     "@nodemelivre/types": "*",
-    "@nodemelivre/users": "*"
+    "@nodemelivre/users": "*",
+    "@nodemelivre/webhooks": "*"
   }
 }

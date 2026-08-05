@@ -10,10 +10,12 @@
       "@nodemelivre/types": ["../types/src/index.ts"],
       "@nodemelivre/auth": ["../auth/src/index.ts"],
       "@nodemelivre/items": ["../items/src/index.ts"],
+      "@nodemelivre/messages": ["../messages/src/index.ts"],
       "@nodemelivre/orders": ["../orders/src/index.ts"],
       "@nodemelivre/users": ["../users/src/index.ts"],
       "@nodemelivre/shipments": ["../shipments/src/index.ts"],
-      "@nodemelivre/questions": ["../questions/src/index.ts"]
+      "@nodemelivre/questions": ["../questions/src/index.ts"],
+      "@nodemelivre/webhooks": ["../webhooks/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts"]
