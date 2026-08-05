@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '22'
           registry-url: 'https://npm.pkg.github.com/'
@@ -40,7 +40,11 @@ jobs:
           for pkg in packages/*/; do
             name=$(basename "$pkg")
             echo "Publishing @nodemelivre/$name..."
-            npm publish "$pkg" --tag beta
+            if npm publish "$pkg" --tag beta --access restricted 2>&1 | grep -q "already exists"; then
+              echo "  → @nodemelivre/$name já existe, pulando"
+            else
+              echo "  → @nodemelivre/$name publicado"
+            fi
           done
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
