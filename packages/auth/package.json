@@ -1,0 +1,30 @@
+{
+  "name": "@nodemelivre/auth",
+  "version": "0.1.0",
+  "description": "OAuth2 e gerenciamento de tokens do NodeMeLivre para o Mercado Livre",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@nodemelivre/core": "*",
+    "@nodemelivre/errors": "*",
+    "@nodemelivre/http": "*"
+  }
+}

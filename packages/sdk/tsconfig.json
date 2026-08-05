@@ -1,8 +1,19 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "dist",
-    "rootDir": "src"
+    "paths": {
+      "@nodemelivre/core/test-utils": ["../core/src/test-utils.ts"],
+      "@nodemelivre/core": ["../core/src/index.ts"],
+      "@nodemelivre/errors": ["../errors/src/index.ts"],
+      "@nodemelivre/http": ["../http/src/index.ts"],
+      "@nodemelivre/types": ["../types/src/index.ts"],
+      "@nodemelivre/auth": ["../auth/src/index.ts"],
+      "@nodemelivre/items": ["../items/src/index.ts"],
+      "@nodemelivre/orders": ["../orders/src/index.ts"],
+      "@nodemelivre/users": ["../users/src/index.ts"],
+      "@nodemelivre/shipments": ["../shipments/src/index.ts"],
+      "@nodemelivre/questions": ["../questions/src/index.ts"]
+    }
   },
   "include": ["src/**/*.ts"]
 }

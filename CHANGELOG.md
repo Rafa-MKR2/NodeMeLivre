@@ -4,7 +4,7 @@ Todas as mudanças notáveis do monorepo serão documentadas neste arquivo.
 
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto adere ao [SemVer](https://semver.org/lang/pt-BR/). Veja o [processo de release](docs/releases/README.md).
 
-## Não publicado
+## [0.1.0] - 2026-08-04
 
 ### Adicionado
 
@@ -18,6 +18,25 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
   - `index.ts` — `MercadoLivre`, `createMercadoLivre` e re-exports.
 - 74 testes (Vitest) cobrindo errors, retry, rate-limit, cliente HTTP, OAuth, token managers e os 5 resources.
 - `docs/` — ADRs 0001–0004, roadmap e processo de release.
+- Arquitetura modular em **11 pacotes por domínio** (ADR-0005 + ADR-0006), cada um publicável de forma independente:
+  - `@nodemelivre/errors` — hierarquia de erros tipados (`ApiError`, `NetworkError`, `OAuthError`, `RateLimitError`...).
+  - `@nodemelivre/core` — transport, logger, test-utils (infra transversal não-HTTP).
+  - `@nodemelivre/http` — `HttpClient`, retry, rate limit, timeout (camada HTTP independente).
+  - `@nodemelivre/types` — tipos de domínio com **unions para enums fechados** (`ListingTypeId`, `ShippingMode`, `OrderStatus`, `PaymentStatus`, `ShipmentType`, `QuestionStatus`, `AnswerStatus`, `ShipmentStatus`, `UserType`, `SiteStatus`, `ReputationLevelId`) — ADR-0007.
+  - `@nodemelivre/auth` — OAuth2, `TokenManager`, `TokenStore`.
+  - `@nodemelivre/items`, `@nodemelivre/orders`, `@nodemelivre/users`, `@nodemelivre/shipments`, `@nodemelivre/questions`.
+  - `@nodemelivre/sdk` — facade que re-exporta todos os pacotes, mantendo a API `createMercadoLivre`/`MercadoLivre`.
+- Testes unificados na raiz via Vitest com aliases para o `src` dos pacotes; build com ordem topológica explícita (errors → core → http → types → auth → resources → sdk).
+- `MockTransport` em `@nodemelivre/core/test-utils.ts` (ADR-0008): API fluente para testar resources sem rede
+  (`.onGet()`, `.onPost()`, `.withDelay()`, `.withError()`, `.reset()`, `.calledWith()`, `.lastCall()`).
+- `fakeTransport()` legado mantido para compatibilidade.
+- Eventos tipados no `HttpClient` (`request`, `response`, `retry`, `httpError`, `rateLimit`) e no `TokenManager` (`tokenRefreshed`), com exemplos em `examples/events.ts`.
+- ADRs 0006–0008 (separação core/errors/http, disciplina de tipos, MockTransport).
+
+### Corrigido
+
+- `OrderStatus` agora inclui `'paid'`.
+- Removida a opção `baseUrl` preterida dos `tsconfig.json` de `packages/*` (TypeScript 6/7).
 
 ### Alterado
 

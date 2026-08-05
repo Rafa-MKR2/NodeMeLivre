@@ -1,7 +1,7 @@
 {
   "name": "@nodemelivre/sdk",
   "version": "0.1.0",
-  "description": "SDK TypeScript para a API do Mercado Livre: OAuth2, rate limit, retry e resources tipados",
+  "description": "NodeMeLivre: SDK TypeScript modular para a API do Mercado Livre",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -20,12 +20,18 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "test": "vitest run",
-    "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
-  "devDependencies": {
-    "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+  "dependencies": {
+    "@nodemelivre/auth": "*",
+    "@nodemelivre/core": "*",
+    "@nodemelivre/errors": "*",
+    "@nodemelivre/http": "*",
+    "@nodemelivre/items": "*",
+    "@nodemelivre/orders": "*",
+    "@nodemelivre/questions": "*",
+    "@nodemelivre/shipments": "*",
+    "@nodemelivre/types": "*",
+    "@nodemelivre/users": "*"
   }
 }

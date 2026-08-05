@@ -2,12 +2,13 @@
 
 > SDK TypeScript para a API do Mercado Livre — tipado, modular e sem esconder a API por baixo.
 
-NodeMeLivre é uma camada de alto nível sobre a [API do Mercado Livre](https://developers.mercadolivre.com.br). Ele cuida do que é repetitivo (OAuth2, retry, rate limit, paginação futura) sem embrulhar o funcionamento da API: o que a API expõe, o SDK expõe.
+NodeMeLivre é um SDK moderno para a [API do Mercado Livre](https://developers.mercadolivre.com.br). Ele simplifica autenticação, gerenciamento de tokens, paginação, tratamento de erros e outras tarefas repetitivas, mantendo uma correspondência fiel com os recursos e comportamentos da API oficial. Todo recurso disponível na API permanece acessível através do SDK, sem abstrações que escondam funcionalidades ou limitem o controle do desenvolvedor.
 
 ## Instalação
 
 ```bash
-npm install @nodemelivre/sdk
+npm install @nodemelivre/sdk        # tudo
+npm install @nodemelivre/http @nodemelivre/items   # só o que precisa
 ```
 
 > Requer Node ≥ 18.17 (fetch nativo).
@@ -45,22 +46,32 @@ const search = await ml.items.search('MLB', { q: 'fone bluetooth' })
 
 - **Auth** — OAuth2 (`authorization_code`, `refresh_token`, `credentials`), refresh automático com leeway de 60s, dedupe de chamadas concorrentes, `TokenStore` pluggável (`InMemoryTokenStore`, `FileTokenStore`).
 - **HTTP** — retry com backoff exponencial, timeout via `AbortSignal`, rate limit por recurso (`X-Rate-Limit-*`), injeção de `fetch`.
+- **Events** — `ml.http.on('request'|'response'|'retry'|'httpError'|'rateLimit')`, `ml.tokens.on('tokenRefreshed')` para observabilidade total.
 - **Resources** — `items`, `orders`, `users`, `shipments`, `questions`, todos tipados.
 - **Erros** — `ApiError` tipado por status, `RateLimitError`, `NetworkError`, `OAuthError`.
 - **Tipagem estrita** — `strict: true`, sem `any`.
 
 ## Estrutura do repositório
 
+Monorepo modular por domínio (ADR-0005). Cada pacote publica de forma independente:
+
 ```text
-packages/sdk/        Pacote publicável (@nodemelivre/sdk)
-  src/auth/          OAuth2, TokenManager, TokenStore
-  src/http/          Cliente, retry, rate limit
-  src/resources/     items, orders, users, shipments, questions
-  src/types/         Tipos de domínio (item, order, user, ...)
-  src/errors/        Erros tipados
+packages/errors/     Erros tipados (ApiError, NetworkError, OAuthError, RateLimitError...)
+packages/http/       HttpClient, retry, rate limit, timeout
+packages/core/       Transport, logger, test-utils
+packages/types/      Tipos de domínio (item, order, user, shipment, question)
+packages/auth/       OAuth2, TokenManager, TokenStore
+packages/items/      Recursos de anúncios
+packages/orders/     Recursos de vendas
+packages/users/      Recursos de usuários
+packages/shipments/  Recursos de envios
+packages/questions/  Recursos de perguntas
+packages/sdk/        Facade: re-exporta tudo (@nodemelivre/sdk)
 docs/                ADRs, roadmap, releases
 examples/            Exemplos executáveis
 ```
+
+`@nodemelivre/sdk` re-exporta todos os módulos — quem instala só o SDK tem tudo; quem quer leveza instala os pacotes individuais.
 
 ## Documentação
 
