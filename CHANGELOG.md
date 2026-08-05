@@ -4,6 +4,23 @@ Todas as mudanças notáveis do monorepo serão documentadas neste arquivo.
 
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto adere ao [SemVer](https://semver.org/lang/pt-BR/). Veja o [processo de release](docs/releases/README.md).
 
+## [1.0.0] - 2026-08-05
+
+### Adicionado
+
+- **SDK consolidado** — `createMercadoLivre` facade expõe 12 resources: `items`, `orders`, `users`, `shipments`, `questions`, `images`, `messages`, `webhooks`, `auth`, `http`, `core`, `types`, `errors`.
+- **Webhooks** (`@nodemelivre/webhooks`) — `parse(payload)` + `verify(payload, applicationId)` autentica via `application_id` (ML não usa HMAC).
+- **Messages** (`@nodemelivre/messages`) — chat pós-venda: `list`, `get`, `send` com `tag=post_sale`.
+- **Operações nível 3**:
+  - `Items.createAndPublish(input)` — cria e garante publicado.
+  - `Questions.reply(questionId, text)` — responde + marca respondida.
+  - `Shipments.printLabel(ids, { format })` — etiqueta PDF/ZPL como `ArrayBuffer`.
+  - `responseType: 'json' | 'text' | 'arraybuffer'` no transport/HttpClient.
+- **Images** — `UploadSource = Blob | Buffer | Uint8Array | ArrayBuffer` extensível, nome padrão `image.bin`.
+- **Paginação** — `paginate()` no core + `Items.list()` (`for await`).
+- **ADRs 0001–0012**, 12 exemplos, roadmap, CHANGELOG.
+- 110 testes (Vitest), CI verde.
+
 ## [0.4.2] - 2026-08-05
 
 ### Alterado

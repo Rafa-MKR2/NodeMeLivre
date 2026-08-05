@@ -10,7 +10,7 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | **v0.2.x** | Upload de imagens + variações em itens | Destravar a criação real de anúncios (foto + SKU) | ✔ Concluído |
 | **v0.3.x** | Paginação assíncrona + operações nível 3 | Ergonomia: `for await`, `publish`, `pause`, `waitUntilPaid` | ✔ Concluído |
 | **v0.4.x** | Webhooks (`parse`/`verify`) + `messages` | Notificação em tempo real e chat de comprador | ✔ Concluído |
-| **v1.0.0** | API pública consolidada, docs completas, estabilidade | Marco de produção | ⏳ Planejado |
+| **v1.0.0** | API pública consolidada, docs completas, estabilidade | Marco de produção | ✔ Concluído 2026-08-05 |
 
 > **Critério de "versão sólida" (v1.0):** o integrador consegue, de ponta a ponta, autenticar, criar anúncio com foto e variação, paginar buscas, acompanhar vendas/perguntas/envios em tempo real e operar por chat — sem workaround manual.
 
@@ -114,7 +114,18 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | `responseType` (`json`/`text`/`arraybuffer`) no transport/HttpClient | ✔ |
 | ADR-0012 (operações nível 3) | ✔ |
 
-## Prioridade B concluída — v1.0 desbloqueada
+## ## Concluído (v1.0)
+
+| Feature | Status |
+|---|---|
+| API pública consolidada (SDK facade com todos os 12 resources) | ✔ |
+| Docs completas (ADRs 0001–0012, exemplos, roadmap, CHANGELOG) | ✔ |
+| 110 testes (Vitest) passando | ✔ |
+| CI verde (lint, typecheck, teste, build) | ✔ |
+
+---
+
+## Prioridade C — Pós-v1.0 (ecossistema)
 
 ---
 
