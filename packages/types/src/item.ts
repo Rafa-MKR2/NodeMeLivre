@@ -22,6 +22,34 @@ export interface ItemAttribute {
   values?: { id?: string; name: string; struct?: unknown }[]
 }
 
+/** Combinação de atributos que define uma variação (ex.: cor + tamanho). */
+export interface VariationAttribute {
+  id?: string
+  name: string
+  value_id?: string
+  value_name?: string
+}
+
+/** Variação de um item (ex.: "vermelho, G"). */
+export interface ItemVariation {
+  id: number
+  attribute_combinations: VariationAttribute[]
+  price?: number
+  available_quantity?: number
+  sold_quantity?: number
+  picture_ids?: string[]
+  sale_terms?: unknown[]
+}
+
+/** Payload de variação para criação/atualização de item. */
+export interface ItemVariationInput {
+  attribute_combinations: VariationAttribute[]
+  price?: number
+  available_quantity?: number
+  picture_ids?: string[]
+  sale_terms?: unknown[]
+}
+
 export interface Item {
   id: string
   site_id: string
@@ -47,6 +75,7 @@ export interface Item {
   last_updated: string
   tags?: string[]
   attributes?: ItemAttribute[]
+  variations?: ItemVariation[]
   shipping?: {
     free_shipping?: boolean
     mode?: ShippingMode
@@ -68,6 +97,7 @@ export interface ItemInput {
   pictures?: { source: string }[]
   video_id?: string
   attributes?: ItemAttribute[]
+  variations?: ItemVariationInput[]
   shipping?: { free_shipping?: boolean; mode?: ShippingMode }
 }
 
