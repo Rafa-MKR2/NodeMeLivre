@@ -50,6 +50,20 @@ describe('HttpClient.request', () => {
     expect(spy).toHaveBeenCalledTimes(1)
   })
 
+  it('deve passar FormData direto sem serializar como JSON', async () => {
+    const spy = mockFetch((_url, init) => {
+      expect(init.method).toBe('POST')
+      expect(init.body).toBeInstanceOf(FormData)
+      return json({ ok: true })
+    })
+
+    const form = new FormData()
+    form.append('file', new Blob(['bytes']), 'foto.jpg')
+
+    await client().post('/pictures/items/upload', form)
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
   it('deve enviar o Authorization quando há token provider', async () => {
     mockFetch((_url, init) => {
       const headers = new Headers(init.headers)
