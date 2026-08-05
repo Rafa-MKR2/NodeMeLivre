@@ -113,6 +113,14 @@ export class OAuthError extends MercadoLivreError {
   }
 }
 
+/** Estouro de tempo em operações que aguardam um estado (ex.: pedido pago). */
+export class PollingTimeoutError extends MercadoLivreError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'PollingTimeoutError'
+  }
+}
+
 function parseRetryAfter(headers: Headers): number | undefined {
   const raw = headers.get('retry-after')
   if (!raw) return undefined
