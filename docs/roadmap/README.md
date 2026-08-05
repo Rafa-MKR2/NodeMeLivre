@@ -7,31 +7,32 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | Versão | Escopo | Objetivo | Status |
 |---|---|---|---|
 | **v0.1.0** | Base estável (monorepo, HTTP, OAuth2, TokenStore, 5 resources) | Publicar núcleo sólido; feedback inicial | ✔ Publicado 2026-08-04 |
-| **v0.2.x** | Paginação assíncrona, eventos, operações nível 3 | Ergonomia: `for await`, `ml.on(...)`, `ml.items.publish()` |
-| **v0.3.x** | Upload de imagens, webhooks `verify/parse`, PKCE | Recursos de plataforma |
-| **v0.4.x** | Resources extras: payments, messages, billing | Cobertura de API |
-| **v1.0.0** | API pública consolidada, estabilidade garantida | Marco de produção |
+| **v0.2.x** | Upload de imagens + variações em itens | Destravar a criação real de anúncios (foto + SKU) | ⏳ Próximo |
+| **v0.3.x** | Paginação assíncrona + operações nível 3 | Ergonomia: `for await`, `publish`, `pause`, `waitUntilPaid` | ⏳ Planejado |
+| **v0.4.x** | Webhooks (`verify`/`parse`) + `messages` | Notificação em tempo real e chat de comprador | ⏳ Planejado |
+| **v1.0.0** | API pública consolidada, docs completas, estabilidade | Marco de produção | ⏳ Planejado |
 
-> Não esperamos 100% da API do ML para publicar. Entregamos valor incremental.
+> **Critério de "versão sólida" (v1.0):** o integrador consegue, de ponta a ponta, autenticar, criar anúncio com foto e variação, paginar buscas, acompanhar vendas/perguntas/envios em tempo real e operar por chat — sem workaround manual.
+
+> Itens adiados para pós-v1.0 (não bloqueiam produção): PKCE (foco SPA/mobile), middleware/plugins, cache, métricas, `payments`/`billing`.
 
 ---
 
-## Prioridade A — Fundação (aumenta capacidade do SDK)
+## Prioridade A — Destrava o vendedor (v0.2 → v0.3)
 
 | Feature | Dificuldade | Tempo | Status |
 |---|---|---|---|
-| **Eventos** (`ml.on('request' \| 'response' \| 'retry' \| 'tokenRefreshed' \| 'rateLimit' \| 'error')`) | Média | 2 dias | ✔ Concluído |
-| **Paginação assíncrona** (`for await (const item of ml.items.list(params))`) | Média | 2 dias | ⏳ Planejado |
 | **Upload de imagens** (`ml.images.upload(file)`) | Média | 2 dias | ⏳ Planejado |
-| **Webhooks** (`ml.webhooks.verify(payload, signature)`, `ml.webhooks.parse(payload)`) | Média | 3 dias | ⏳ Planejado |
-| **PKCE** no fluxo OAuth2 | Média | 2 dias | ⏳ Planejado |
+| **Variações em itens** (`ItemInput.variations`, SKU/tamanho/cor) | Média | 2 dias | ⏳ Planejado |
+| **Paginação assíncrona** (`for await (const item of ml.items.list(params))`) | Média | 2 dias | ⏳ Planejado |
+| **Eventos** (`ml.on('request' \| 'response' \| 'retry' \| 'tokenRefreshed' \| 'rateLimit' \| 'error')`) | Média | 2 dias | ✔ Concluído |
 | **MockTransport** para testes (testar sem chamar ML) | Baixa | 1 dia | ✔ Concluído |
 
-> **Observabilidade** é o diferencial: quando alguém abrir issue "o refresh não funcionou", eventos valem ouro para depuração.
+> **Sem upload de imagem e variação, o SDK só cria anúncio "quebrado".** Esses dois destravam a operação real.
 
 ---
 
-## Prioridade B — Ergonomia (desenvolvedor ama o SDK)
+## Prioridade B — Produção (v0.3 → v0.4)
 
 | Feature | Dificuldade | Tempo | Status |
 |---|---|---|---|
@@ -41,12 +42,14 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | `ml.orders.waitUntilPaid(orderId, timeout?)` → polling com backoff | | | |
 | `ml.questions.reply(questionId, text)` → responde + marca lida | | | |
 | `ml.shipments.printLabel(shipmentId)` → gera + baixa label | | | |
+| **Webhooks** (`ml.webhooks.verify(payload, signature)`, `ml.webhooks.parse(payload)`) | Média | 3 dias | ⏳ Planejado |
+| **Messages** (`ml.messages.list/get/send` — chat de comprador) | Média | 3 dias | ⏳ Planejado |
 
-> Substitui sequências manuais por uma chamada única, tipada e testada.
+> **Webhooks** habilitam notificação em tempo real (nova venda, pergunta, mensagem) — essencial para rodar em produção.
 
 ---
 
-## Prioridade C — Ecossistema (transforma SDK em plataforma)
+## Prioridade C — Pós-v1.0 (ecossistema)
 
 | Feature | Dificuldade | Tempo | Status |
 |---|---|---|---|
@@ -54,6 +57,8 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | **Cache** (ETag, `If-None-Match`, in-memory + pluggável) | Média | 2 dias | ⏳ Planejado |
 | **Métricas** (latência, taxa de erro, rate-limit remaining) | Média | 2 dias | ⏳ Planejado |
 | **Mocks avançados** (fixtures, scenarios, MSW integration) | Média | 2 dias | ⏳ Planejado |
+| **PKCE** no fluxo OAuth2 (foco SPA/mobile) | Média | 2 dias | ⏳ Planejado |
+| **Resources extras** (payments, billing) | Baixa | 5 dias | ⏳ Planejado |
 
 ---
 
