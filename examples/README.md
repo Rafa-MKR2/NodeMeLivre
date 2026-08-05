@@ -21,3 +21,4 @@ ML_CLIENT_ID=... ML_CLIENT_SECRET=... npx tsx examples/quickstart.ts
 | [quickstart.ts](quickstart.ts) | Fluxo OAuth2 de ponta a ponta e uso dos resources |
 | [file-token-store.ts](file-token-store.ts) | Persistência de token em arquivo (`FileTokenStore`) |
 | [retry-and-rate-limit.ts](retry-and-rate-limit.ts) | Configuração de retry, timeout e observação de rate-limit |
+| [events.ts](events.ts) | Observabilidade: logs de request/response/retry/error/rateLimit e tokenRefreshed |
