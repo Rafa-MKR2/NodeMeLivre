@@ -24,7 +24,7 @@ async function main(): Promise<void> {
   const code = 'CODIGO_RECEBIDO_NO_CALLBACK'
   await ml.authenticate(redirectUri, code)
 
-  // 1. Upload da imagem (aceita Blob ou Buffer do Node).
+  // 1. Upload da imagem (aceita Blob, Buffer, Uint8Array ou ArrayBuffer).
   const bytes = await readFile('/caminho/para/foto.jpg')
   const picture = await ml.images.upload(bytes, { filename: 'foto.jpg' })
   const pictureUrl = picture.variations[0]?.secure_url ?? ''

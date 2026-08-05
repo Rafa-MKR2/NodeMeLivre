@@ -4,6 +4,14 @@ Todas as mudanças notáveis do monorepo serão documentadas neste arquivo.
 
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto adere ao [SemVer](https://semver.org/lang/pt-BR/). Veja o [processo de release](docs/releases/README.md).
 
+## [0.4.2] - 2026-08-05
+
+### Alterado
+
+- `Images.upload` agora aceita `UploadSource = Blob | Buffer | Uint8Array | ArrayBuffer` — alias em `@nodemelivre/types` para permitir novos formatos (ex.: `File`, `ReadableStream`) sem quebrar a API pública.
+- Nome padrão do arquivo no multipart alterado de `imagem` para `image.bin` (com extensão, para melhor interoperabilidade com servidores de upload).
+- ADR-0009 atualizado com a evolução do tipo de entrada.
+
 ## [0.4.1] - 2026-08-05
 
 ### Adicionado
