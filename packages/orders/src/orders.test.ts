@@ -1,5 +1,6 @@
 import { fakeTransport } from '@nodemelivre/core/test-utils'
-import { describe, expect, it } from 'vitest'
+import { PollingTimeoutError } from '@nodemelivre/errors'
+import { describe, expect, it, vi } from 'vitest'
 import { Orders } from './orders.js'
 
 const order = { id: 123, total_amount: 50, order_items: [] }
@@ -28,5 +29,45 @@ describe('Orders', () => {
     const transport = fakeTransport(() => [])
     await new Orders(transport).items(123)
     expect(transport.calls[0]).toMatchObject({ path: '/orders/123/items' })
+  })
+
+  it('deve retornar a venda já paga sem aguardar', async () => {
+    const transport = fakeTransport(() => ({ ...order, status: 'paid' }))
+    const paid = await new Orders(transport).waitUntilPaid(123, { timeoutMs: 100, intervalMs: 10 })
+    expect(paid.status).toBe('paid')
+    expect(transport.calls).toHaveLength(1)
+  })
+
+  it('deve aguardar até o pedido ser pago', async () => {
+    const statuses = ['payment_required', 'payment_required', 'paid']
+    const transport = fakeTransport(() => {
+      const status = statuses.shift() ?? 'paid'
+      return { ...order, status }
+    })
+
+    const paid = await new Orders(transport).waitUntilPaid(123, {
+      timeoutMs: 1_000,
+      intervalMs: 10,
+    })
+    expect(paid.status).toBe('paid')
+    expect(transport.calls).toHaveLength(3)
+  })
+
+  it('deve lançar PollingTimeoutError quando o pedido não pagar a tempo', async () => {
+    vi.useFakeTimers()
+    try {
+      const transport = fakeTransport(() => ({ ...order, status: 'payment_required' }))
+      const orders = new Orders(transport)
+
+      const promise = orders.waitUntilPaid(123, { timeoutMs: 100, intervalMs: 50 }).then(
+        () => undefined,
+        (e) => e,
+      )
+      await vi.advanceTimersByTimeAsync(250)
+
+      await expect(promise).resolves.toBeInstanceOf(PollingTimeoutError)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
