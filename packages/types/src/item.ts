@@ -2,6 +2,10 @@ export type ItemStatus = 'active' | 'paused' | 'closed' | 'under_review' | 'inac
 
 export type ItemCondition = 'new' | 'used'
 
+export type ListingTypeId = 'free' | 'gold_special' | 'gold_pro' | 'gold' | 'silver' | 'bronze'
+
+export type ShippingMode = 'me1' | 'me2' | 'me_gratis' | 'custom' | 'not_specified'
+
 export interface ItemPicture {
   id: string
   url: string
@@ -31,7 +35,7 @@ export interface Item {
   available_quantity: number
   sold_quantity: number
   buying_mode: 'buy_it_now'
-  listing_type_id: string
+  listing_type_id: ListingTypeId
   condition: ItemCondition
   pictures?: ItemPicture[]
   video_id?: string
@@ -45,7 +49,7 @@ export interface Item {
   attributes?: ItemAttribute[]
   shipping?: {
     free_shipping?: boolean
-    mode?: string
+    mode?: ShippingMode
     tags?: string[]
     dimensions?: string
   }
@@ -60,11 +64,11 @@ export interface ItemInput {
   currency_id?: string
   available_quantity?: number
   condition?: ItemCondition
-  listing_type_id?: string
+  listing_type_id?: ListingTypeId
   pictures?: { source: string }[]
   video_id?: string
   attributes?: ItemAttribute[]
-  shipping?: { free_shipping?: boolean; mode?: string }
+  shipping?: { free_shipping?: boolean; mode?: ShippingMode }
 }
 
 export interface ItemDescription {

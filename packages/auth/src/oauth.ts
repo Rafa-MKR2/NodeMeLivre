@@ -1,4 +1,5 @@
-import { ApiError, HttpClient, type HttpClientOptions, OAuthError } from '@nodemelivre/core'
+import { ApiError, OAuthError } from '@nodemelivre/errors'
+import { HttpClient, type HttpClientOptions } from '@nodemelivre/http'
 import type { AccessToken } from './token.js'
 
 const TOKEN_PATH = '/oauth/token'

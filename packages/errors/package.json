@@ -1,7 +1,7 @@
 {
-  "name": "@nodemelivre/core",
+  "name": "@nodemelivre/errors",
   "version": "0.1.0",
-  "description": "Núcleo do NodeMeLivre: transport, logger e test-utils",
+  "description": "Erros tipados do NodeMeLivre",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -9,10 +9,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./test-utils": {
-      "types": "./dist/test-utils.d.ts",
-      "import": "./dist/test-utils.js"
     }
   },
   "files": [

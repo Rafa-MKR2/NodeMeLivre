@@ -1,6 +1,6 @@
+import { json, mockFetch, restoreFetch } from '@nodemelivre/core/test-utils'
+import { ApiError, NetworkError, RateLimitError, UnauthorizedError } from '@nodemelivre/errors'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, NetworkError, RateLimitError, UnauthorizedError } from '../errors/index.js'
-import { json, mockFetch, restoreFetch } from '../test-utils.js'
 import { HttpClient, type HttpClientOptions, type TokenProvider } from './client.js'
 
 const noDelay = async (): Promise<void> => {}

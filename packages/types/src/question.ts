@@ -1,6 +1,16 @@
+export type QuestionStatus =
+  | 'UNANSWERED'
+  | 'ANSWERED'
+  | 'ANSWERED_LATE'
+  | 'CLOSED'
+  | 'UNDER_REVIEW'
+  | 'HOLD'
+
+export type AnswerStatus = 'ANSWERED' | 'UNANSWERED'
+
 export interface QuestionAnswer {
   text: string
-  status: string
+  status: AnswerStatus
   date_created: string
 }
 
@@ -10,7 +20,7 @@ export interface Question {
   date_created: string
   item_id: string
   seller_id: number
-  status: string
+  status: QuestionStatus
   text: string
   product_id?: string
 }
@@ -18,7 +28,7 @@ export interface Question {
 export interface QuestionSearchParams {
   item_id?: string
   seller_id?: number
-  status?: 'UNANSWERED' | 'ANSWERED' | 'ANSWERED_LATE'
+  status?: QuestionStatus
   api_version?: number
   from?: string
   to?: string

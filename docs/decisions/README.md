@@ -18,4 +18,7 @@ ADRs registram **por que** tomamos cada decisão de arquitetura do SDK.
 | [0002](0002-http-fetch-nativo.md) | HTTP via fetch nativo (undici) | Aceita | 2026-08-04 |
 | [0003](0003-tokenstore-pluggable.md) | TokenStore pluggável | Aceita | 2026-08-04 |
 | [0004](0004-resources-v1.md) | Resources v1: items, orders, users, shipments, questions | Aceita | 2026-08-04 |
-| [0005](0005-arquitetura-modular.md) | Arquitetura modular em pacotes por domínio | Aceita | 2026-08-04 |
+| [0005](0005-arquitetura-modular.md) | Arquitetura modular em pacotes por domínio (9 pacotes) | Aceita | 2026-08-04 |
+| [0006](0006-separacao-core-errors-http.md) | Separação de core em errors, http, core (11 pacotes) | Aceita | 2026-08-04 |
+| [0007](0007-disciplina-tipos-unions.md) | Disciplina de tipos: unions para enums fechados | Aceita | 2026-08-04 |
+| [0008](0008-mocktransport.md) | MockTransport para testes sem rede | Aceita | 2026-08-04 |

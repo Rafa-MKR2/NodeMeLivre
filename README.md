@@ -8,7 +8,7 @@ NodeMeLivre é um SDK moderno para a [API do Mercado Livre](https://developers.m
 
 ```bash
 npm install @nodemelivre/sdk        # tudo
-npm install @nodemelivre/core @nodemelivre/items   # só o que precisa
+npm install @nodemelivre/http @nodemelivre/items   # só o que precisa
 ```
 
 > Requer Node ≥ 18.17 (fetch nativo).
@@ -46,6 +46,7 @@ const search = await ml.items.search('MLB', { q: 'fone bluetooth' })
 
 - **Auth** — OAuth2 (`authorization_code`, `refresh_token`, `credentials`), refresh automático com leeway de 60s, dedupe de chamadas concorrentes, `TokenStore` pluggável (`InMemoryTokenStore`, `FileTokenStore`).
 - **HTTP** — retry com backoff exponencial, timeout via `AbortSignal`, rate limit por recurso (`X-Rate-Limit-*`), injeção de `fetch`.
+- **Events** — `ml.http.on('request'|'response'|'retry'|'httpError'|'rateLimit')`, `ml.tokens.on('tokenRefreshed')` para observabilidade total.
 - **Resources** — `items`, `orders`, `users`, `shipments`, `questions`, todos tipados.
 - **Erros** — `ApiError` tipado por status, `RateLimitError`, `NetworkError`, `OAuthError`.
 - **Tipagem estrita** — `strict: true`, sem `any`.
@@ -55,7 +56,9 @@ const search = await ml.items.search('MLB', { q: 'fone bluetooth' })
 Monorepo modular por domínio (ADR-0005). Cada pacote publica de forma independente:
 
 ```text
-packages/core/       HTTP (retry, rate limit, timeout), erros, logger, transport
+packages/errors/     Erros tipados (ApiError, NetworkError, OAuthError, RateLimitError...)
+packages/http/       HttpClient, retry, rate limit, timeout
+packages/core/       Transport, logger, test-utils
 packages/types/      Tipos de domínio (item, order, user, shipment, question)
 packages/auth/       OAuth2, TokenManager, TokenStore
 packages/items/      Recursos de anúncios
