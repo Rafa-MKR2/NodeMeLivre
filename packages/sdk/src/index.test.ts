@@ -36,6 +36,7 @@ describe('MercadoLivre', () => {
     expect(ml.users).toBeDefined()
     expect(ml.shipments).toBeDefined()
     expect(ml.questions).toBeDefined()
+    expect(ml.images).toBeDefined()
     expect(ml.tokens).toBeDefined()
     expect(ml.auth).toBeDefined()
     expect(ml.http).toBeDefined()

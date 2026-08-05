@@ -14,6 +14,7 @@ import {
   RateLimiter,
   type RetryOptions,
 } from '@nodemelivre/http'
+import { Images } from '@nodemelivre/images'
 import { Items } from '@nodemelivre/items'
 import { Orders } from '@nodemelivre/orders'
 import { Questions } from '@nodemelivre/questions'
@@ -24,6 +25,7 @@ export * from '@nodemelivre/auth'
 export * from '@nodemelivre/core'
 export * from '@nodemelivre/errors'
 export * from '@nodemelivre/http'
+export * from '@nodemelivre/images'
 export * from '@nodemelivre/items'
 export * from '@nodemelivre/orders'
 export * from '@nodemelivre/questions'
@@ -71,6 +73,7 @@ export class MercadoLivre {
   readonly users: Users
   readonly shipments: Shipments
   readonly questions: Questions
+  readonly images: Images
 
   constructor(options: MercadoLivreOptions) {
     const oauthOptions: OAuthOptions = {
@@ -110,6 +113,7 @@ export class MercadoLivre {
     this.users = new Users(this.http)
     this.shipments = new Shipments(this.http)
     this.questions = new Questions(this.http)
+    this.images = new Images(this.http)
   }
 
   /** URL para redirecionar o vendedor ao navegador de autorização. */
