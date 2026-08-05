@@ -36,5 +36,9 @@
     "@nodemelivre/types": "*",
     "@nodemelivre/users": "*",
     "@nodemelivre/webhooks": "*"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }

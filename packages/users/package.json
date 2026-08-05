@@ -1,7 +1,7 @@
 {
   "name": "@nodemelivre/users",
   "version": "1.0.0-beta.1",
-  "description": "Recursos de usuários do NodeMeLivre para a API do Mercado Livre",
+  "description": "Recursos de usu\u00e1rios do NodeMeLivre para a API do Mercado Livre",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -25,5 +25,9 @@
   "dependencies": {
     "@nodemelivre/core": "*",
     "@nodemelivre/types": "*"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }

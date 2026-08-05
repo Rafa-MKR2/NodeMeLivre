@@ -26,5 +26,9 @@
     "@nodemelivre/core": "*",
     "@nodemelivre/errors": "*",
     "@nodemelivre/http": "*"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }

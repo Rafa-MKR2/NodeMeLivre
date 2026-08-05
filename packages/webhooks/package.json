@@ -1,7 +1,7 @@
 {
   "name": "@nodemelivre/webhooks",
   "version": "1.0.0-beta.1",
-  "description": "Recursos de webhooks (notificações) do NodeMeLivre para a API do Mercado Livre",
+  "description": "Recursos de webhooks (notifica\u00e7\u00f5es) do NodeMeLivre para a API do Mercado Livre",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -25,5 +25,9 @@
   "dependencies": {
     "@nodemelivre/errors": "*",
     "@nodemelivre/types": "*"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   }
 }
