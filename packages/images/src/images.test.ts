@@ -54,7 +54,9 @@ describe('Images', () => {
 
     const call = transport.calls[0]
     expect(call).toBeDefined()
-    const file = (call?.body as FormData).get('file') as File
+    const form = call?.body as FormData | undefined
+    expect(form).toBeInstanceOf(FormData)
+    const file = (form as FormData).get('file') as File
     expect(file.name).toBe('image.bin')
   })
 })
