@@ -35,4 +35,19 @@ describe('Questions', () => {
       body: { question_id: 5, text: 'Sim, tem garantia' },
     })
   })
+
+  it('reply deve responder e marcar como respondida (alias de answer)', async () => {
+    const transport = fakeTransport(() => ({
+      text: 'Sim',
+      status: 'ANSWERED',
+      date_created: '2026-01-01',
+    }))
+    await new Questions(transport).reply(5, 'Sim, tem garantia')
+
+    expect(transport.calls[0]).toMatchObject({
+      method: 'POST',
+      path: '/answers',
+      body: { question_id: 5, text: 'Sim, tem garantia' },
+    })
+  })
 })

@@ -72,4 +72,17 @@ export class Items {
   pause(itemId: string): Promise<Item> {
     return this.updateStatus(itemId, 'paused')
   }
+
+  /**
+   * Cria um anúncio novo e garante que fique publicado (`active`).
+   * Se o item já nascer ativo (comum), apenas cria; caso contrário,
+   * publica via `updateStatus('active')`.
+   */
+  async createAndPublish(input: ItemInput): Promise<Item> {
+    const item = await this.create(input)
+    if (item.status !== 'active') {
+      return this.publish(item.id)
+    }
+    return item
+  }
 }

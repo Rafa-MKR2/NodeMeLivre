@@ -4,6 +4,18 @@ Todas as mudanças notáveis do monorepo serão documentadas neste arquivo.
 
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto adere ao [SemVer](https://semver.org/lang/pt-BR/). Veja o [processo de release](docs/releases/README.md).
 
+## [0.4.1] - 2026-08-05
+
+### Adicionado
+
+- `Items.createAndPublish(input)` — cria um anúncio e, se ele não nascer `active`, publica via `updateStatus('active')`. Mantém `publish(itemId)` como alias simples (sem overload ambíguo).
+- `Questions.reply(questionId, text)` — alias ergonômico de `answer`; responder via `POST /answers` já marca a pergunta como `ANSWERED`.
+- `Shipments.printLabel(ids | ids[], { format?: 'pdf' | 'zpl2' })` — baixa a etiqueta de envio (`GET /shipment_labels`) e retorna `Promise<ArrayBuffer>` (binário íntegro). Formato padrão `pdf`.
+- `responseType: 'json' | 'text' | 'arraybuffer'` em `ResourceRequest` (`@nodemelivre/core`) e `HttpClientRequest` (`@nodemelivre/http`) — suporte a respostas binárias/plano no transport.
+- ADR-0012 (operações nível 3) e exemplo `examples/nivel-3-completo.ts`.
+- Prioridade B do roadmap concluída (operações nível 3 completas) — v1.0 desbloqueada.
+- 107 testes (Vitest) — 7 novos (createAndPublish, reply, printLabel, arraybuffer/text no client).
+
 ## [0.4.0] - 2026-08-05
 
 ### Adicionado
