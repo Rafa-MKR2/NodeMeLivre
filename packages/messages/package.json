@@ -1,6 +1,6 @@
 {
   "name": "@nodemelivre/messages",
-  "version": "0.4.0",
+  "version": "1.0.0-beta.1",
   "description": "Recursos de mensagens (chat pós-venda) do NodeMeLivre para a API do Mercado Livre",
   "type": "module",
   "main": "./dist/index.js",

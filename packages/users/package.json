@@ -1,6 +1,6 @@
 {
   "name": "@nodemelivre/users",
-  "version": "0.1.0",
+  "version": "1.0.0-beta.1",
   "description": "Recursos de usuários do NodeMeLivre para a API do Mercado Livre",
   "type": "module",
   "main": "./dist/index.js",

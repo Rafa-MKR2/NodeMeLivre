@@ -1,6 +1,6 @@
 {
   "name": "@nodemelivre/orders",
-  "version": "0.1.0",
+  "version": "1.0.0-beta.1",
   "description": "Recursos de vendas (orders) do NodeMeLivre para a API do Mercado Livre",
   "type": "module",
   "main": "./dist/index.js",
