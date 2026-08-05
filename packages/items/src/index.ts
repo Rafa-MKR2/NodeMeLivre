@@ -5,5 +5,8 @@ export type {
   ItemSearchParams,
   ItemSearchResponse,
   ItemStatus,
+  ItemVariation,
+  ItemVariationInput,
+  VariationAttribute,
 } from '@nodemelivre/types'
 export { Items } from './items.js'
