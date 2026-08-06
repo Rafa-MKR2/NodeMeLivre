@@ -67,6 +67,28 @@ describe('DeduplicatingLogger', () => {
       vi.useRealTimers()
     }
   })
+
+  it('deve manter a mensagem original no resumo (inclusive com dois-pontos)', () => {
+    vi.useFakeTimers()
+    try {
+      const inner = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+      const logger = new DeduplicatingLogger(inner, { maxRepeats: 1, windowMs: 1_000 })
+
+      logger.error({}, 'falhou: conexão recusada')
+      logger.error({}, 'falhou: conexão recusada')
+      logger.error({}, 'falhou: conexão recusada')
+
+      vi.advanceTimersByTime(1_001)
+      logger.error({}, 'falhou: conexão recusada')
+
+      expect(inner.warn.mock.calls[0]?.[0]).toMatchObject({
+        count: 3,
+        message: 'falhou: conexão recusada',
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('createConsoleLogger', () => {

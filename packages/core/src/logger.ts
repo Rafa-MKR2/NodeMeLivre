@@ -24,7 +24,7 @@ export class DeduplicatingLogger implements Logger {
   private readonly maxRepeats: number
   private readonly seen = new Map<
     string,
-    { count: number; firstSeen: number; lastLogged: number }
+    { count: number; firstSeen: number; lastLogged: number; message: string }
   >()
 
   constructor(logger: Logger, options: { windowMs?: number; maxRepeats?: number } = {}) {
@@ -38,12 +38,12 @@ export class DeduplicatingLogger implements Logger {
     return `${level}:${message}:${ctxStr}`
   }
 
-  private shouldLog(key: string): boolean {
+  private shouldLog(key: string, message: string): boolean {
     const now = Date.now()
     const entry = this.seen.get(key)
 
     if (!entry) {
-      this.seen.set(key, { count: 1, firstSeen: now, lastLogged: now })
+      this.seen.set(key, { count: 1, firstSeen: now, lastLogged: now, message })
       return true
     }
 
@@ -51,43 +51,50 @@ export class DeduplicatingLogger implements Logger {
     if (now - entry.firstSeen > this.windowMs) {
       if (entry.count > this.maxRepeats) {
         this.logger.warn(
-          { count: entry.count, message: key.split(':').slice(1).join(':') },
+          { count: entry.count, message: entry.message },
           `Log repetido ${entry.count}x na última janela (suprimindo)`,
         )
       }
-      this.seen.set(key, { count: 1, firstSeen: now, lastLogged: now })
+      this.seen.set(key, { count: 1, firstSeen: now, lastLogged: now, message: entry.message })
       return true
     }
 
-    entry.count++
+    // Referências imutáveis: a entry é sempre substituída por um novo objeto,
+    // nunca mutada no lugar — evita corridas de concorrência sobre o objeto
+    // compartilhado no Map.
+    const count = entry.count + 1
+    this.seen.set(key, {
+      count,
+      firstSeen: entry.firstSeen,
+      lastLogged: count <= this.maxRepeats ? now : entry.lastLogged,
+      message: entry.message,
+    })
 
-    // Loga nas primeiras N vezes, depois suprime o restante da janela.
-    if (entry.count <= this.maxRepeats) {
-      entry.lastLogged = now
-      return true
-    }
-
-    return false
+    return count <= this.maxRepeats
   }
 
   debug(obj?: unknown, msg?: string): void {
-    const key = this.makeKey('debug', msg ?? '', obj)
-    if (this.shouldLog(key)) this.logger.debug(obj, msg)
+    const message = msg ?? ''
+    const key = this.makeKey('debug', message, obj)
+    if (this.shouldLog(key, message)) this.logger.debug(obj, msg)
   }
 
   info(obj?: unknown, msg?: string): void {
-    const key = this.makeKey('info', msg ?? '', obj)
-    if (this.shouldLog(key)) this.logger.info(obj, msg)
+    const message = msg ?? ''
+    const key = this.makeKey('info', message, obj)
+    if (this.shouldLog(key, message)) this.logger.info(obj, msg)
   }
 
   warn(obj?: unknown, msg?: string): void {
-    const key = this.makeKey('warn', msg ?? '', obj)
-    if (this.shouldLog(key)) this.logger.warn(obj, msg)
+    const message = msg ?? ''
+    const key = this.makeKey('warn', message, obj)
+    if (this.shouldLog(key, message)) this.logger.warn(obj, msg)
   }
 
   error(obj?: unknown, msg?: string): void {
-    const key = this.makeKey('error', msg ?? '', obj)
-    if (this.shouldLog(key)) this.logger.error(obj, msg)
+    const message = msg ?? ''
+    const key = this.makeKey('error', message, obj)
+    if (this.shouldLog(key, message)) this.logger.error(obj, msg)
   }
 
   /** Limpa o cache de deduplicação. */

@@ -10,6 +10,8 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 - `HttpClient`: a retentativa pós-refresh (401) não consome o orçamento de retry — `retry: false` ainda renova o token. Quando o loop se esgota, o **erro real da API** é re-lançado em vez de um `ApiError` sintético com `status 0`.
 - `DeduplicatingLogger`: o resumo de logs suprimidos agora é emitido quando a janela expira (antes o caminho era inalcançável e o resumo nunca aparecia).
+- `DeduplicatingLogger`: a entry no cache é sempre substituída por uma referência nova (imutável) — nunca mutada no lugar — eliminando corridas de concorrência sobre o objeto compartilhado. O resumo emite a mensagem original (antes era reconstruída do key via `split(':')`, quebrando mensagens com dois-pontos).
+- `RateLimiter`: espera single-flight — requisições concorrentes no mesmo recurso esgotado compartilham uma única espera até o reset (evita "thundering herd" no reset) e o estado esgotado é limpo ao fim da janela.
 - `deepOmitEmpty`: preserva `null` intencional — enviar `null` em `PUT /items` continua limpando o campo (antes era removido do payload).
 
 ### Alterado

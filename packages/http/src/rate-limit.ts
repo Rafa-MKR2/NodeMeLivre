@@ -57,8 +57,19 @@ export function rateLimitKey(method: string, path: string): string {
   return `${method}:${resource}`
 }
 
+export interface RateLimiterOptions {
+  /** Sleep injetável para esperas de rate limit — útil em testes. */
+  delay?: (ms: number) => Promise<void>
+}
+
 export class RateLimiter {
   private readonly states = new Map<string, RateLimitState>()
+  private readonly waits = new Map<string, Promise<void>>()
+  private readonly delay: (ms: number) => Promise<void>
+
+  constructor(options: RateLimiterOptions = {}) {
+    this.delay = options.delay ?? sleep
+  }
 
   /** Atualiza o estado a partir dos headers da resposta. */
   update(key: string, headers: Headers): void {
@@ -90,7 +101,27 @@ export class RateLimiter {
       this.states.delete(key)
       return
     }
-    await sleep(delayMs)
+
+    // Single-flight: chamadas concorrentes no mesmo recurso esgotado
+    // compartilham a mesma espera — evita o "thundering herd" no reset,
+    // em que todas as requisições dormem o mesmo tempo e disparam juntas.
+    const existing = this.waits.get(key)
+    if (existing !== undefined) return existing
+
+    const wait = this.delay(delayMs).then(() => {
+      // Após a janela, limpa o estado esgotado — apenas se ainda for o
+      // mesmo reset (uma resposta fresca pode ter atualizado o estado).
+      const current = this.states.get(key)
+      if (current !== undefined && current.resetAt === resetAt && current.remaining === 0) {
+        this.states.delete(key)
+      }
+    })
+    this.waits.set(key, wait)
+    try {
+      await wait
+    } finally {
+      this.waits.delete(key)
+    }
   }
 
   stateOf(key: string): RateLimitState | undefined {

@@ -32,7 +32,7 @@ Status dos problemas identificados
 | 1 | Estados presos na interface (SSE) | Pendente (aplicação de exemplo) |
 | 2 | Dashboard pouco resiliente | Parcial — resiliência do SDK implementada; degradação parcial no painel pendente |
 | 3 | Crescimento infinito de estados OAuth | Implementado — `OAuthStateStore` (TTL, limite, limpeza automática) integrado ao `OAuthClient` (CSRF) |
-| 4 | Corridas de concorrência (logs) | Pendente |
+| 4 | Corridas de concorrência (logs) | Implementado — `DeduplicatingLogger` imutável + `RateLimiter` single-flight |
 | 5 | Tratamento de configuração | Pendente |
 | 6 | Objetos parcialmente válidos | Implementado — `deepOmitEmpty` envia somente propriedades válidas |
 | 7 | Logs redundantes | Implementado — `DeduplicatingLogger` centraliza e deduplica |
@@ -187,6 +187,8 @@ Objetivo
 Eliminar mutações por índice.
 
 Utilizar referências imutáveis.
+
+> **Status: Implementado.** `DeduplicatingLogger` agora substitui a entry do cache por uma referência nova (imutável) em vez de mutar o objeto compartilhado no `Map`, e o resumo emite a mensagem original. `RateLimiter` usa espera single-flight para requisições concorrentes em recurso esgotado (sem "thundering herd" no reset) e limpa o estado esgotado ao fim da janela.
 
 5. Tratamento de configuração
 Problema

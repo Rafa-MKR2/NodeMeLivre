@@ -105,6 +105,57 @@ describe('RateLimiter', () => {
     await limiter.waitIfNeeded('/items/MLB1')
     expect(limiter.stateOf('/items/MLB1')).toBeUndefined()
   })
+
+  it('deve compartilhar a espera entre chamadas concorrentes (single-flight)', async () => {
+    const resolves: Array<() => void> = []
+    const delay = () =>
+      new Promise<void>((resolve) => {
+        resolves.push(resolve)
+      })
+    const limiter = new RateLimiter({ delay })
+
+    limiter.update(
+      '/items/MLB1',
+      headers({
+        'x-rate-limit-remaining': '0',
+        'x-rate-limit-reset': '60',
+      }),
+    )
+
+    const p1 = limiter.waitIfNeeded('/items/MLB1')
+    const p2 = limiter.waitIfNeeded('/items/MLB1')
+
+    expect(resolves.length).toBe(1)
+
+    resolves[0]?.()
+    await p1
+    await p2
+
+    expect(resolves.length).toBe(1)
+  })
+
+  it('deve limpar o estado esgotado após o reset', async () => {
+    const resolves: Array<() => void> = []
+    const delay = () =>
+      new Promise<void>((resolve) => {
+        resolves.push(resolve)
+      })
+    const limiter = new RateLimiter({ delay })
+
+    limiter.update(
+      '/items/MLB1',
+      headers({
+        'x-rate-limit-remaining': '0',
+        'x-rate-limit-reset': '60',
+      }),
+    )
+
+    const waiting = limiter.waitIfNeeded('/items/MLB1')
+    resolves[0]?.()
+    await waiting
+
+    expect(limiter.stateOf('/items/MLB1')).toBeUndefined()
+  })
 })
 
 describe('rateLimitKey', () => {
