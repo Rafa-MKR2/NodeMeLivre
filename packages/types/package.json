@@ -1,7 +1,7 @@
 {
   "name": "@nodemelivre/types",
   "version": "1.0.0-beta.1",
-  "description": "Tipos de domínio do NodeMeLivre para a API do Mercado Livre",
+  "description": "Tipos de dom\u00ednio do NodeMeLivre para a API do Mercado Livre",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -21,5 +21,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
   }
 }

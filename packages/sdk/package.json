@@ -36,5 +36,8 @@
     "@nodemelivre/types": "*",
     "@nodemelivre/users": "*",
     "@nodemelivre/webhooks": "*"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
   }
 }

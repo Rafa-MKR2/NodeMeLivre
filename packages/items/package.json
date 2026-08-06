@@ -1,7 +1,7 @@
 {
   "name": "@nodemelivre/items",
   "version": "1.0.0-beta.1",
-  "description": "Recursos de anúncios (items) do NodeMeLivre para a API do Mercado Livre",
+  "description": "Recursos de an\u00fancios (items) do NodeMeLivre para a API do Mercado Livre",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -25,5 +25,8 @@
   "dependencies": {
     "@nodemelivre/core": "*",
     "@nodemelivre/types": "*"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
   }
 }

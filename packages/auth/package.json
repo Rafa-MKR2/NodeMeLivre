@@ -26,5 +26,8 @@
     "@nodemelivre/core": "*",
     "@nodemelivre/errors": "*",
     "@nodemelivre/http": "*"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
   }
 }

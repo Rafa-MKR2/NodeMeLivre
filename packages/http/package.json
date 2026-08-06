@@ -25,5 +25,8 @@
   "dependencies": {
     "@nodemelivre/core": "*",
     "@nodemelivre/errors": "*"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
   }
 }

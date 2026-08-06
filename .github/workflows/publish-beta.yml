@@ -1,0 +1,50 @@
+name: Publish Beta to GitHub Packages
+
+on:
+  push:
+    tags:
+      - 'v1.0.0-beta.*'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          registry-url: 'https://npm.pkg.github.com/'
+          scope: '@nodemelivre'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build all packages
+        run: npm run build
+
+      - name: Run tests
+        run: npm test
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Publish to GitHub Packages
+        run: |
+          for pkg in packages/*/; do
+            name=$(basename "$pkg")
+            echo "Publishing @nodemelivre/$name..."
+            if npm publish "$pkg" --tag beta --access restricted 2>&1 | grep -q "already exists"; then
+              echo "  → @nodemelivre/$name já existe, pulando"
+            else
+              echo "  → @nodemelivre/$name publicado"
+            fi
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

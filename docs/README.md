@@ -7,6 +7,7 @@
 | [decisions/](decisions/) | ADRs — decisões de arquitetura com contexto e consequências |
 | [roadmap/](roadmap/README.md) | Roadmap, prioridades e Definition of Done |
 | [releases/](releases/README.md) | Processo de release e CHANGELOG |
+| [github-packages.md](github-packages.md) | Publicação e instalação via GitHub Packages |
 
 ## Regra de ouro
 
