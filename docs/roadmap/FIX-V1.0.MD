@@ -25,6 +25,20 @@ Não haverá expansão significativa da API.
 
 O foco é qualidade.
 
+Status dos problemas identificados
+
+| # | Problema | Status |
+| --- | --- | --- |
+| 1 | Estados presos na interface (SSE) | Pendente (aplicação de exemplo) |
+| 2 | Dashboard pouco resiliente | Parcial — resiliência do SDK implementada; degradação parcial no painel pendente |
+| 3 | Crescimento infinito de estados OAuth | Implementado — `OAuthStateStore` (TTL, limite, limpeza automática) integrado ao `OAuthClient` (CSRF) |
+| 4 | Corridas de concorrência (logs) | Pendente |
+| 5 | Tratamento de configuração | Pendente |
+| 6 | Objetos parcialmente válidos | Implementado — `deepOmitEmpty` envia somente propriedades válidas |
+| 7 | Logs redundantes | Implementado — `DeduplicatingLogger` centraliza e deduplica |
+| 8 | Hardening HTTP | Implementado — `securityHeaders` padrão `false` + nota de segurança no README |
+| 9 | UX | Pendente (aplicação de exemplo) |
+
 Objetivos da série v1.0.x
 Estabilidade
 
@@ -140,6 +154,8 @@ Objetivo
 
 Trabalhar com degradação parcial.
 
+> **Status: Parcial.** O lado SDK da resiliência foi implementado: retentativa pós-401 com refresh automático sem consumir o orçamento de retry, re-lançamento do erro real da API, tracking de rate-limit por recurso (`método:recurso`) e parsing robusto de `X-Rate-Limit-Reset`. A degradação parcial no dashboard do painel (ex.: "Perguntas indisponíveis" em vez de 500) segue pendente.
+
 3. Crescimento infinito de estados OAuth
 Problema
 
@@ -156,6 +172,9 @@ Implementar:
 TTL
 limpeza automática
 limite máximo
+
+> **Status: Implementado.** `OAuthStateStore` aplica TTL (padrão 10 min), limite máximo (padrão 1000, removendo o mais antigo) e limpeza automática em intervalo (padrão 1 min); `consume`/`has`/`get` expiram entradas vencidas. Integrado ao `OAuthClient` via `stateStore`: `authorizationUrl` gera e armazena o `state` automaticamente e `consumeState` valida o state recebido no callback (proteção CSRF).
+
 4. Corridas de concorrência
 Problema
 
@@ -206,6 +225,8 @@ Objetivo
 
 Enviar somente propriedades válidas.
 
+> **Status: Implementado.** `deepOmitEmpty` remove estruturas vazias antes do envio e preserva `null` intencional (ex.: limpar campo via `PUT /items`).
+
 7. Logs redundantes
 Problema
 
@@ -221,6 +242,8 @@ Objetivo
 
 Centralizar logging.
 
+> **Status: Implementado.** `DeduplicatingLogger` deduplica logs repetidos por janela e emite um resumo dos suprimidos ao final (o caminho antes inalcançável foi corrigido).
+
 8. Hardening HTTP
 
 Adicionar cabeçalhos recomendados.
@@ -231,6 +254,8 @@ X-Content-Type-Options
 Referrer-Policy
 
 Documentar limites atuais.
+
+> **Status: Implementado (decisão de design).** O SDK não injeta headers de segurança (CSP, `X-Frame-Options`, `X-Content-Type-Options`...) em requisições — eles pertencem ao servidor do integrador. `securityHeaders` agora é `false` por padrão e o README documenta a recomendação (Helmet) e os limites do rate-limit por recurso.
 
 9. UX
 
