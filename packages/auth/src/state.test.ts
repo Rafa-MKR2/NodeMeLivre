@@ -79,4 +79,17 @@ describe('OAuthStateStore', () => {
     const store = new OAuthStateStore()
     expect(store.has('inexistente')).toBe(false)
   })
+
+  it('deve registrar um state fornecido pelo chamador', () => {
+    const store = new OAuthStateStore()
+    expect(store.register('meu-state', 'https://app.com/cb')).toBe(true)
+    const entry = store.consume('meu-state')
+    expect(entry?.redirectUri).toBe('https://app.com/cb')
+  })
+
+  it('deve recusar registrar state duplicado', () => {
+    const store = new OAuthStateStore()
+    expect(store.register('x', 'https://a.com')).toBe(true)
+    expect(store.register('x', 'https://b.com')).toBe(false)
+  })
 })

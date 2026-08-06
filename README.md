@@ -130,7 +130,7 @@ await writeFile('etiqueta.pdf', Buffer.from(pdf))
 | **HTTP robusto** | Retry com backoff, timeout, rate-limit automático (`X-Rate-Limit-*`), eventos para observabilidade. |
 | **Resiliência** | `parallel()` e `ResilientTransport` — degradação parcial: o dashboard continua com o que conseguiu carregar. |
 
-> **Nota de segurança:** o SDK não injeta headers de resposta (CSP, `X-Frame-Options`, etc.) nas requisições — esses headers pertencem ao seu servidor. Use Helmet (ou equivalente) no seu app. Para CSRF no fluxo OAuth, use `OAuthStateStore` com `state` e consuma no callback.
+> **Nota de segurança:** o SDK não injeta headers de resposta (CSP, `X-Frame-Options`, etc.) nas requisições — esses headers pertencem ao seu servidor. Use Helmet (ou equivalente) no seu app. Para CSRF no fluxo OAuth, configure um `OAuthStateStore` — o `state` é gerado e armazenado automaticamente na URL de autorização e validado no callback via `ml.consumeState()`.
 
 ---
 

@@ -59,6 +59,25 @@ export class OAuthStateStore {
   }
 
   /**
+   * Armazena um state fornecido pelo chamador (em vez de gerar um novo).
+   * Retorna `false` se o state já existir no store.
+   */
+  register(state: string, redirectUri: string, metadata?: Record<string, unknown>): boolean {
+    if (this.store.has(state)) return false
+    this.enforceMaxEntries()
+    const entry: OAuthStateEntry = {
+      state,
+      redirectUri,
+      createdAt: this.clock(),
+    }
+    if (metadata !== undefined) {
+      entry.metadata = metadata
+    }
+    this.store.set(state, entry)
+    return true
+  }
+
+  /**
    * Valida e consome um state (remove do store após uso).
    * Retorna a entry se válido, null caso contrário.
    */

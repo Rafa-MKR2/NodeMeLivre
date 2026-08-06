@@ -1,8 +1,11 @@
 import {
   type AccessToken,
+  type AuthorizationUrlOptions,
   InMemoryTokenStore,
   OAuthClient,
   type OAuthOptions,
+  type OAuthStateEntry,
+  type OAuthStateStore,
   TokenManager,
   type TokenManagerOptions,
   type TokenStore,
@@ -49,6 +52,8 @@ export interface MercadoLivreOptions {
   baseUrl?: string
   /** Onde persistir o token. Padrão: em memória. */
   tokenStore?: TokenStore
+  /** Store de estados OAuth para proteção CSRF no fluxo de autorização. */
+  stateStore?: OAuthStateStore
   /** Controle de rate limit por recurso. Padrão: instância nova. */
   rateLimiter?: RateLimiter
   /** Fetch injetável (útil em testes). */
@@ -94,6 +99,7 @@ export class MercadoLivre {
     if (options.siteId !== undefined) oauthOptions.siteId = options.siteId
     if (options.baseUrl !== undefined) oauthOptions.baseUrl = options.baseUrl
     if (options.fetchImpl !== undefined) oauthOptions.fetchImpl = options.fetchImpl
+    if (options.stateStore !== undefined) oauthOptions.stateStore = options.stateStore
     this.auth = new OAuthClient(oauthOptions)
 
     const tokenStore = options.tokenStore ?? new InMemoryTokenStore()
@@ -129,11 +135,28 @@ export class MercadoLivre {
     this.webhooks = new Webhooks()
   }
 
-  /** URL para redirecionar o vendedor ao navegador de autorização. */
-  authorizationUrl(redirectUri: string, state?: string): string {
-    return this.auth.authorizationUrl(
-      state === undefined ? { redirectUri } : { redirectUri, state },
-    )
+  /**
+   * URL para redirecionar o vendedor ao navegador de autorização.
+   * Com `stateStore` configurado, o `state` é gerado e armazenado
+   * automaticamente (proteção CSRF).
+   */
+  authorizationUrl(
+    redirectUri: string,
+    state?: string,
+    metadata?: Record<string, unknown>,
+  ): string {
+    const options: AuthorizationUrlOptions = { redirectUri }
+    if (state !== undefined) options.state = state
+    if (metadata !== undefined) options.metadata = metadata
+    return this.auth.authorizationUrl(options)
+  }
+
+  /**
+   * Valida e consome o `state` recebido no callback OAuth.
+   * Retorna os dados armazenados ou `null` se inválido/consumido.
+   */
+  consumeState(state: string): OAuthStateEntry | null {
+    return this.auth.consumeState(state)
   }
 
   /** Troca o `code` recebido no redirect por um token e persiste na store. */

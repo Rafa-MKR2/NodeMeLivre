@@ -1,5 +1,6 @@
 import { ApiError, OAuthError } from '@nodemelivre/errors'
 import { HttpClient, type HttpClientOptions } from '@nodemelivre/http'
+import type { OAuthStateEntry, OAuthStateStore } from './state.js'
 import type { AccessToken } from './token.js'
 
 const TOKEN_PATH = '/oauth/token'
@@ -37,12 +38,20 @@ export interface OAuthOptions {
   fetchImpl?: typeof fetch
   /** Client HTTP usado apenas nas chamadas de token (sem Authorization). */
   httpClient?: HttpClient
+  /**
+   * Store de estados OAuth para proteção CSRF. Quando configurado,
+   * `authorizationUrl` gera/armazena o `state` automaticamente e
+   * `consumeState` valida o state recebido no callback.
+   */
+  stateStore?: OAuthStateStore
 }
 
 export interface AuthorizationUrlOptions {
   redirectUri: string
-  /** Valor anti-CSRF que volta intacto no redirect. */
+  /** Valor anti-CSRF que volta intacto no redirect. Padrão: gerado e armazenado no `stateStore`. */
   state?: string
+  /** Dados extras associados ao state (ex.: página para redirecionar após o login). */
+  metadata?: Record<string, unknown>
 }
 
 export interface TokenGrantOptions {
@@ -72,12 +81,14 @@ export class OAuthClient {
   private readonly clientSecret: string
   private readonly siteId: string
   private readonly httpClient: HttpClient
+  readonly stateStore: OAuthStateStore | undefined
 
   constructor(options: OAuthOptions) {
     this.clientId = options.clientId
     this.clientSecret = options.clientSecret
     this.siteId = options.siteId ?? DEFAULT_SITE_ID
     this.httpClient = options.httpClient ?? buildTokenClient(options)
+    this.stateStore = options.stateStore
   }
 
   /** URL para redirecionar o vendedor ao navegador de autorização do Mercado Livre. */
@@ -86,10 +97,31 @@ export class OAuthClient {
     url.searchParams.set('response_type', 'code')
     url.searchParams.set('client_id', this.clientId)
     url.searchParams.set('redirect_uri', options.redirectUri)
-    if (options.state !== undefined) {
-      url.searchParams.set('state', options.state)
+
+    const state = this.resolveState(options)
+    if (state !== undefined) {
+      url.searchParams.set('state', state)
     }
     return url.toString()
+  }
+
+  /**
+   * Valida e consome um `state` recebido no callback OAuth (proteção CSRF).
+   * Retorna os dados armazenados (redirectUri/metadata) se válido, ou `null`
+   * se não houver `stateStore` configurado, o state for inexistente/expirado
+   * ou já tiver sido consumido.
+   */
+  consumeState(state: string): OAuthStateEntry | null {
+    return this.stateStore?.consume(state) ?? null
+  }
+
+  private resolveState(options: AuthorizationUrlOptions): string | undefined {
+    if (this.stateStore === undefined) return options.state
+    if (options.state !== undefined) {
+      this.stateStore.register(options.state, options.redirectUri, options.metadata)
+      return options.state
+    }
+    return this.stateStore.create(options.redirectUri, options.metadata)
   }
 
   /** Troca o código de autorização por um AccessToken. */
