@@ -1,5 +1,5 @@
 import { json, mockFetch, restoreFetch } from '@nodemelivre/core/test-utils'
-import { OAuthError } from '@nodemelivre/errors'
+import { ConfigurationError, OAuthError } from '@nodemelivre/errors'
 import type { HttpClient } from '@nodemelivre/http'
 import { afterEach, describe, expect, it } from 'vitest'
 import { OAuthClient } from './oauth.js'
@@ -22,6 +22,28 @@ function clientWithStateStore(): { ml: OAuthClient; store: OAuthStateStore } {
 
 afterEach(() => {
   restoreFetch()
+})
+
+describe('OAuthClient.config', () => {
+  it('deve lançar ConfigurationError quando clientId está ausente', () => {
+    expect(() => new OAuthClient({ clientId: '', clientSecret: 'SECRET' })).toThrow(
+      ConfigurationError,
+    )
+  })
+
+  it('deve lançar ConfigurationError quando clientSecret está ausente', () => {
+    expect(() => new OAuthClient({ clientId: 'APP_ID', clientSecret: '' })).toThrow(
+      ConfigurationError,
+    )
+  })
+
+  it('deve lançar ConfigurationError quando nenhuma credencial é informada', () => {
+    expect(() => new OAuthClient({} as never)).toThrow(ConfigurationError)
+  })
+
+  it('deve aceitar credenciais válidas', () => {
+    expect(() => new OAuthClient({ clientId: 'APP_ID', clientSecret: 'SECRET' })).not.toThrow()
+  })
 })
 
 describe('OAuthClient.authorizationUrl', () => {

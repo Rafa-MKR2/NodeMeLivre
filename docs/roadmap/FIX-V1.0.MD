@@ -33,7 +33,7 @@ Status dos problemas identificados
 | 2 | Dashboard pouco resiliente | Parcial — resiliência do SDK implementada; degradação parcial no painel pendente |
 | 3 | Crescimento infinito de estados OAuth | Implementado — `OAuthStateStore` (TTL, limite, limpeza automática) integrado ao `OAuthClient` (CSRF) |
 | 4 | Corridas de concorrência (logs) | Implementado — `DeduplicatingLogger` imutável + `RateLimiter` single-flight |
-| 5 | Tratamento de configuração | Pendente |
+| 5 | Tratamento de configuração | Implementado — `ConfigurationError` com mensagens claras (SDK e OAuthClient) |
 | 6 | Objetos parcialmente válidos | Implementado — `deepOmitEmpty` envia somente propriedades válidas |
 | 7 | Logs redundantes | Implementado — `DeduplicatingLogger` centraliza e deduplica |
 | 8 | Hardening HTTP | Implementado — `securityHeaders` padrão `false` + nota de segurança no README |
@@ -211,6 +211,8 @@ ML_CLIENT_SECRET
 Objetivo
 
 Melhorar experiência do integrador.
+
+> **Status: Implementado.** `createMercadoLivre` e `OAuthClient` validam as credenciais no construtor e lançam `ConfigurationError` com mensagem apontando `ML_CLIENT_ID`/`ML_CLIENT_SECRET` — em vez de erro interno ou erro vindo da API.
 
 6. Objetos parcialmente válidos
 Problema

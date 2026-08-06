@@ -22,6 +22,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 ### Adicionado
 
 - `OAuthStateStore` integrado ao `OAuthClient`: com `stateStore` configurado, `authorizationUrl` gera/armazena o `state` automaticamente (CSRF) e `consumeState` valida o state recebido no callback. Exposto no facade via `ml.consumeState()` e opção `stateStore` em `MercadoLivreOptions`.
+- `OAuthClient`: valida `clientId`/`clientSecret` no construtor — uso direto sem credenciais lança `ConfigurationError` com mensagem clara (antes gerava URL quebrada ou erro vindo da API).
 - `InputValidationError` em `@nodemelivre/errors` (validação de entrada no cliente, antes de enviar à API).
 - Validações: `Messages.send` rejeita texto acima de 350 caracteres; `Images.upload` rejeita arquivo vazio.
 - `Orders.waitUntilPaid` aceita `AbortSignal` para cancelamento antecipado do polling.

@@ -1,4 +1,5 @@
 import { json, mockFetch, restoreFetch } from '@nodemelivre/core/test-utils'
+import { ConfigurationError } from '@nodemelivre/errors'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createMercadoLivre } from './index.js'
 
@@ -40,6 +41,11 @@ describe('MercadoLivre', () => {
     expect(ml.tokens).toBeDefined()
     expect(ml.auth).toBeDefined()
     expect(ml.http).toBeDefined()
+  })
+
+  it('deve lançar ConfigurationError com mensagem clara sem credenciais', () => {
+    expect(() => createMercadoLivre({} as never)).toThrow(ConfigurationError)
+    expect(() => createMercadoLivre({} as never)).toThrow(/ML_CLIENT_ID/)
   })
 
   it('deve montar a URL de autorização com siteId', () => {

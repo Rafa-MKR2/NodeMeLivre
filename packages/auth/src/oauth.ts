@@ -1,4 +1,4 @@
-import { ApiError, OAuthError } from '@nodemelivre/errors'
+import { ApiError, ConfigurationError, OAuthError } from '@nodemelivre/errors'
 import { HttpClient, type HttpClientOptions } from '@nodemelivre/http'
 import type { OAuthStateEntry, OAuthStateStore } from './state.js'
 import type { AccessToken } from './token.js'
@@ -84,6 +84,11 @@ export class OAuthClient {
   readonly stateStore: OAuthStateStore | undefined
 
   constructor(options: OAuthOptions) {
+    if (!options.clientId || !options.clientSecret) {
+      throw new ConfigurationError(
+        'OAuth não configurado. Defina clientId e clientSecret (ML_CLIENT_ID e ML_CLIENT_SECRET).',
+      )
+    }
     this.clientId = options.clientId
     this.clientSecret = options.clientSecret
     this.siteId = options.siteId ?? DEFAULT_SITE_ID
