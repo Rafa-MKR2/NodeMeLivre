@@ -137,6 +137,14 @@ export class ConfigurationError extends MercadoLivreError {
   }
 }
 
+/** Entrada inválida detectada no cliente, antes de enviar à API. */
+export class InputValidationError extends MercadoLivreError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'InputValidationError'
+  }
+}
+
 function parseRetryAfter(headers: Headers): number | undefined {
   const raw = headers.get('retry-after')
   if (!raw) return undefined

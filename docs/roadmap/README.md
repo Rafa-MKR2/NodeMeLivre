@@ -114,7 +114,7 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | `responseType` (`json`/`text`/`arraybuffer`) no transport/HttpClient | ✔ |
 | ADR-0012 (operações nível 3) | ✔ |
 
-## ## Concluído (v1.0)
+## Concluído (v1.0)
 
 | Feature | Status |
 |---|---|
@@ -122,10 +122,6 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | Docs completas (ADRs 0001–0012, exemplos, roadmap, CHANGELOG) | ✔ |
 | 110 testes (Vitest) passando | ✔ |
 | CI verde (lint, typecheck, teste, build) | ✔ |
-
----
-
-## Prioridade C — Pós-v1.0 (ecossistema)
 
 ---
 

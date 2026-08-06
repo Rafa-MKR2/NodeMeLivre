@@ -47,27 +47,24 @@ export class DeduplicatingLogger implements Logger {
       return true
     }
 
-    // Limpa entradas antigas
+    // Janela expirada: emite resumo do que foi suprimido e reinicia a contagem.
     if (now - entry.firstSeen > this.windowMs) {
+      if (entry.count > this.maxRepeats) {
+        this.logger.warn(
+          { count: entry.count, message: key.split(':').slice(1).join(':') },
+          `Log repetido ${entry.count}x na última janela (suprimindo)`,
+        )
+      }
       this.seen.set(key, { count: 1, firstSeen: now, lastLogged: now })
       return true
     }
 
     entry.count++
 
-    // Loga nas primeiras N vezes, depois a cada janela
+    // Loga nas primeiras N vezes, depois suprime o restante da janela.
     if (entry.count <= this.maxRepeats) {
       entry.lastLogged = now
       return true
-    }
-
-    // Loga resumo periodicamente
-    if (now - entry.lastLogged > this.windowMs) {
-      this.logger.warn(
-        { count: entry.count, message: key.split(':').slice(1).join(':') },
-        `Log repetido ${entry.count}x na última janela (suprimindo)`,
-      )
-      entry.lastLogged = now
     }
 
     return false

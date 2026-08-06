@@ -1,4 +1,5 @@
 import { type QueryParams, type ResourceTransport, toQuery } from '@nodemelivre/core'
+import { InputValidationError } from '@nodemelivre/errors'
 import type { Message, MessageSendInput } from '@nodemelivre/types'
 
 /** Parâmetros da listagem de mensagens de um pack. */
@@ -6,6 +7,9 @@ export interface MessagesListParams {
   /** Marca as mensagens como lidas na consulta (padrão `true`). */
   markAsRead?: boolean
 }
+
+/** Limite de caracteres do texto de uma mensagem imposto pela API. */
+export const MESSAGE_TEXT_MAX_LENGTH = 350
 
 /** Recursos do chat pós-venda (mensagens de comprador). */
 export class Messages {
@@ -35,7 +39,12 @@ export class Messages {
   }
 
   /** Envia uma mensagem ao comprador. Máximo de 350 caracteres. */
-  send(input: MessageSendInput): Promise<Message> {
+  async send(input: MessageSendInput): Promise<Message> {
+    if (input.text.length > MESSAGE_TEXT_MAX_LENGTH) {
+      throw new InputValidationError(
+        `Texto da mensagem excede o limite de ${MESSAGE_TEXT_MAX_LENGTH} caracteres (recebidos: ${input.text.length})`,
+      )
+    }
     return this.transport.post('/messages', input, { query: { tag: 'post_sale' } })
   }
 }

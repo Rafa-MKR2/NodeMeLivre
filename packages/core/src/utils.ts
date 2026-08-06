@@ -23,7 +23,13 @@ export function omitEmpty<T extends object>(obj: T): Partial<T> {
   return out
 }
 
-/** Remove recursivamente chaves com valor `undefined`, `null`, ou objeto vazio. */
+/**
+ * Remove recursivamente chaves com valor `undefined` ou objeto vazio.
+ *
+ * `null` é **preservado**: na API do Mercado Livre, enviar `null` é a forma
+ * de limpar/desativar um campo (ex.: remover um atributo em `PUT /items`).
+ * Apenas objetos que ficam vazios após a limpeza recursiva são omitidos.
+ */
 export function deepOmitEmpty<T>(value: T): T {
   if (Array.isArray(value)) {
     return value.map(deepOmitEmpty) as T
@@ -32,16 +38,15 @@ export function deepOmitEmpty<T>(value: T): T {
     const out: Record<string, unknown> = {}
     for (const [key, val] of Object.entries(value as object)) {
       const cleaned = deepOmitEmpty(val)
-      if (cleaned !== undefined && cleaned !== null) {
-        if (
-          typeof cleaned === 'object' &&
-          !Array.isArray(cleaned) &&
-          Object.keys(cleaned).length === 0
-        ) {
-          continue
-        }
-        out[key] = cleaned
+      if (cleaned === undefined) continue
+      if (
+        typeof cleaned === 'object' &&
+        !Array.isArray(cleaned) &&
+        Object.keys(cleaned).length === 0
+      ) {
+        continue
       }
+      out[key] = cleaned
     }
     return out as T
   }

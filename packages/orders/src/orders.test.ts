@@ -70,4 +70,29 @@ describe('Orders', () => {
       vi.useRealTimers()
     }
   })
+
+  it('deve abortar o polling quando o signal é cancelado', async () => {
+    vi.useFakeTimers()
+    try {
+      const transport = fakeTransport(() => ({ ...order, status: 'payment_required' }))
+      const controller = new AbortController()
+      const orders = new Orders(transport)
+
+      const promise = orders
+        .waitUntilPaid(123, { timeoutMs: 10_000, intervalMs: 50, signal: controller.signal })
+        .then(
+          () => undefined,
+          (e) => e,
+        )
+
+      controller.abort()
+      await vi.advanceTimersByTimeAsync(100)
+
+      const err = await promise
+      expect(err).toBeInstanceOf(Error)
+      expect((err as Error).name).toBe('AbortError')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

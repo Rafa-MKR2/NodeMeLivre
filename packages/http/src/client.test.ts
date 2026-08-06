@@ -116,6 +116,59 @@ describe('HttpClient.request', () => {
     expect(spy).toHaveBeenCalledTimes(2)
   })
 
+  it('deve renovar o token em 401 mesmo com retry desativado', async () => {
+    let calls = 0
+    const spy = mockFetch(() => {
+      calls += 1
+      if (calls === 1) return json({ message: 'expired' }, 401)
+      return json({ id: 'MLB1' })
+    })
+
+    const refreshed = vi.fn(async () => {})
+    const result = await client({
+      auth: provider('token-old', refreshed),
+      retry: { maxRetries: 0 },
+    }).get<{ id: string }>('/items/MLB1')
+
+    expect(result.id).toBe('MLB1')
+    expect(refreshed).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenCalledTimes(2)
+  })
+
+  it('deve lançar o erro real do 401 quando o refresh esgota as tentativas', async () => {
+    mockFetch(() => json({ message: 'expired' }, 401))
+    const refreshed = vi.fn(async () => {})
+    const err = await client({
+      auth: provider('token-old', refreshed),
+      retry: { maxRetries: 0 },
+    })
+      .get('/users/me')
+      .catch((e) => e)
+
+    expect(err).toBeInstanceOf(UnauthorizedError)
+    expect((err as UnauthorizedError).status).toBe(401)
+    expect(refreshed).toHaveBeenCalledTimes(1)
+  })
+
+  it('não deve injetar headers de resposta por padrão', async () => {
+    mockFetch((_url, init) => {
+      const headers = new Headers(init.headers)
+      expect(headers.get('x-frame-options')).toBeNull()
+      expect(headers.get('x-content-type-options')).toBeNull()
+      return json({ ok: true })
+    })
+    await client().get('/users/me')
+  })
+
+  it('deve injetar headers de segurança quando securityHeaders é true', async () => {
+    mockFetch((_url, init) => {
+      const headers = new Headers(init.headers)
+      expect(headers.get('x-frame-options')).toBe('DENY')
+      return json({ ok: true })
+    })
+    await client({ securityHeaders: true }).get('/users/me')
+  })
+
   it('deve aplicar retry em 429 e ter sucesso na próxima tentativa', async () => {
     let calls = 0
     const spy = mockFetch(() => {

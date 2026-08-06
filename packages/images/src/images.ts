@@ -1,4 +1,5 @@
 import type { ResourceTransport } from '@nodemelivre/core'
+import { InputValidationError } from '@nodemelivre/errors'
 import type { ImageUploadOptions, ImageUploadResponse, UploadSource } from '@nodemelivre/types'
 
 /** Recursos de imagens. */
@@ -10,8 +11,11 @@ export class Images {
    * (id e variações de tamanho). Use o `id` retornado em `picture_ids`
    * ao criar/anunciar itens com variações.
    */
-  upload(file: UploadSource, options: ImageUploadOptions = {}): Promise<ImageUploadResponse> {
+  async upload(file: UploadSource, options: ImageUploadOptions = {}): Promise<ImageUploadResponse> {
     const blob = toBlob(file)
+    if (blob.size === 0) {
+      throw new InputValidationError('Imagem vazia — envie um arquivo com conteúdo')
+    }
     const form = new FormData()
     form.append('file', blob, options.filename ?? 'image.bin')
     return this.transport.post('/pictures/items/upload', form)

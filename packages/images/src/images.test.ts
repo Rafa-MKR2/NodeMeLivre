@@ -1,4 +1,5 @@
 import { fakeTransport } from '@nodemelivre/core/test-utils'
+import { InputValidationError } from '@nodemelivre/errors'
 import { describe, expect, it } from 'vitest'
 import { Images } from './images.js'
 
@@ -58,5 +59,12 @@ describe('Images', () => {
     expect(form).toBeInstanceOf(FormData)
     const file = (form as FormData).get('file') as File
     expect(file.name).toBe('image.bin')
+  })
+
+  it('deve rejeitar imagem vazia antes de enviar', async () => {
+    const transport = fakeTransport(() => uploaded)
+    const err = await new Images(transport).upload(new Blob([])).catch((e) => e)
+    expect(err).toBeInstanceOf(InputValidationError)
+    expect(transport.calls).toHaveLength(0)
   })
 })

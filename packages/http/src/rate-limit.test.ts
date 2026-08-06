@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RateLimiter } from './rate-limit.js'
+import { RateLimiter, rateLimitKey } from './rate-limit.js'
 
 function headers(extra?: Record<string, string>): Headers {
   const h = new Headers()
@@ -10,7 +10,7 @@ function headers(extra?: Record<string, string>): Headers {
 describe('RateLimiter', () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    vi.setSystemTime(1_000_000_000_000)
+    vi.setSystemTime(1_750_000_000_000)
   })
 
   afterEach(() => {
@@ -31,6 +31,24 @@ describe('RateLimiter', () => {
     expect(state?.limit).toBe(1000)
     expect(state?.remaining).toBe(42)
     expect(state?.resetAt).toBe(1_700_000_000_000)
+  })
+
+  it('deve interpretar reset em milissegundos (epoch)', () => {
+    const limiter = new RateLimiter()
+    limiter.update(
+      '/items/MLB1',
+      headers({ 'x-rate-limit-reset': '1750000000000', 'x-rate-limit-remaining': '0' }),
+    )
+    expect(limiter.stateOf('/items/MLB1')?.resetAt).toBe(1_750_000_000_000)
+  })
+
+  it('deve interpretar reset relativo em segundos', () => {
+    const limiter = new RateLimiter()
+    limiter.update(
+      '/items/MLB1',
+      headers({ 'x-rate-limit-reset': '30', 'x-rate-limit-remaining': '0' }),
+    )
+    expect(limiter.stateOf('/items/MLB1')?.resetAt).toBe(1_750_000_030_000)
   })
 
   it('deve ignorar respostas sem headers de rate limit', () => {
@@ -54,7 +72,7 @@ describe('RateLimiter', () => {
 
   it('deve esperar até o reset quando o recurso está esgotado', async () => {
     const limiter = new RateLimiter()
-    const resetAt = 1_000_000_005_000 // daqui a 5s
+    const resetAt = 1_750_000_005_000 // daqui a 5s
     limiter.update(
       '/items/MLB1',
       headers({
@@ -81,10 +99,24 @@ describe('RateLimiter', () => {
       '/items/MLB1',
       headers({
         'x-rate-limit-remaining': '0',
-        'x-rate-limit-reset': '999999999',
+        'x-rate-limit-reset': '1700000000',
       }),
     )
     await limiter.waitIfNeeded('/items/MLB1')
     expect(limiter.stateOf('/items/MLB1')).toBeUndefined()
+  })
+})
+
+describe('rateLimitKey', () => {
+  it('deve agrupar por método e primeiro segmento do path', () => {
+    expect(rateLimitKey('GET', '/items/MLB1')).toBe('GET:items')
+    expect(rateLimitKey('GET', '/items/MLB2')).toBe('GET:items')
+    expect(rateLimitKey('POST', '/items')).toBe('POST:items')
+    expect(rateLimitKey('GET', '/sites/MLB/search')).toBe('GET:sites')
+  })
+
+  it('deve usar o path como recurso quando não há segmento', () => {
+    expect(rateLimitKey('GET', '/')).toBe('GET:/')
+    expect(rateLimitKey('GET', 'sem-slash')).toBe('GET:sem-slash')
   })
 })

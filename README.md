@@ -126,8 +126,11 @@ await writeFile('etiqueta.pdf', Buffer.from(pdf))
 | **Images** | `upload(Blob | Buffer | Uint8Array)` → multipart, retorna `id` + variações de tamanho no CDN. |
 | **Messages** | Chat pós-venda: `list`, `get`, `send` (comprador ↔ vendedor). |
 | **Webhooks** | `parse` + `verify(applicationId)` — validação real do ML (não usa HMAC). |
-| **Erros tipados** | `ApiError` (por status), `RateLimitError`, `NetworkError`, `OAuthError`, `PollingTimeoutError`, `WebhookError`. |
+| **Erros tipados** | `ApiError` (por status), `RateLimitError`, `NetworkError`, `OAuthError`, `PollingTimeoutError`, `WebhookError`, `InputValidationError`. |
 | **HTTP robusto** | Retry com backoff, timeout, rate-limit automático (`X-Rate-Limit-*`), eventos para observabilidade. |
+| **Resiliência** | `parallel()` e `ResilientTransport` — degradação parcial: o dashboard continua com o que conseguiu carregar. |
+
+> **Nota de segurança:** o SDK não injeta headers de resposta (CSP, `X-Frame-Options`, etc.) nas requisições — esses headers pertencem ao seu servidor. Use Helmet (ou equivalente) no seu app. Para CSRF no fluxo OAuth, use `OAuthStateStore` com `state` e consuma no callback.
 
 ---
 

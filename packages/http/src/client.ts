@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { type Logger, silentLogger } from '@nodemelivre/core'
 import { ApiError, NetworkError, RateLimitError, toApiError } from '@nodemelivre/errors'
-import type { RateLimiter } from './rate-limit.js'
+import { type RateLimiter, rateLimitKey } from './rate-limit.js'
 import {
   DEFAULT_RETRY,
   defaultShouldRetry,
@@ -65,7 +65,11 @@ export interface HttpClientOptions {
   defaultHeaders?: Record<string, string>
   /** Sleep injetável para backoff — útil para testes. */
   delay?: (ms: number) => Promise<void>
-  /** Adiciona headers de segurança recomendados (padrão: true). */
+  /**
+   * Adiciona headers de resposta como headers de request (padrão: `false`).
+   * Esses headers (CSP, X-Frame-Options etc.) pertencem ao servidor do
+   * integrador, não a requisições de API — mantidos apenas para opt-in.
+   */
   securityHeaders?: boolean
 }
 
@@ -93,7 +97,7 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
     super()
     this.baseUrl = options.baseUrl ?? MERCADO_LIVRE_BASE_URL
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 30_000
-    this.securityHeaders = options.securityHeaders ?? true
+    this.securityHeaders = options.securityHeaders ?? false
     const security = this.securityHeaders ? SECURITY_HEADERS : {}
     this.defaultHeaders = { ...security, ...options.defaultHeaders }
     this.fetchImpl = options.fetchImpl ?? fetch
@@ -142,7 +146,9 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
   async request<T>(request: HttpClientRequest): Promise<T> {
     const method = request.method ?? 'GET'
     const url = buildUrl(this.baseUrl, request.path, request.query)
-    const maxAttempts = request.retry === false ? 1 : this.retry.maxRetries + 1
+    // A retentativa pós-refresh (401) não consome o orçamento de retry.
+    const refreshSlots = this.auth?.refresh !== undefined ? 1 : 0
+    const maxAttempts = (request.retry === false ? 1 : this.retry.maxRetries + 1) + refreshSlots
 
     let token: string | undefined
     if (request.auth !== false && this.auth !== undefined) {
@@ -150,13 +156,15 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
     }
     let headers = this.buildHeaders(request.headers, token)
     let refreshed = false
+    let lastError: ApiError | undefined
 
     // Emit request event
     this.emit('request', request)
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (this.rateLimiter !== undefined) {
-        const state = this.rateLimiter.stateOf(request.path)
+        const key = rateLimitKey(method, request.path)
+        const state = this.rateLimiter.stateOf(key)
         if (
           state?.remaining !== undefined &&
           state.remaining === 0 &&
@@ -164,7 +172,7 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
         ) {
           this.emit('rateLimit', state.resetAt, request)
         }
-        await this.rateLimiter.waitIfNeeded(request.path)
+        await this.rateLimiter.waitIfNeeded(key)
       }
 
       let response: Response
@@ -193,7 +201,7 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
       }
 
       if (this.rateLimiter !== undefined) {
-        this.rateLimiter.update(request.path, response.headers)
+        this.rateLimiter.update(rateLimitKey(method, request.path), response.headers)
       }
 
       // Emit response event for all responses
@@ -205,6 +213,7 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
 
       const body = await tryReadBody(response)
       const apiError = toApiError(response.status, body, response.headers)
+      lastError = apiError
       this.logger.debug({ err: apiError, url: url.toString() }, 'erro da api')
       this.emit('httpError', apiError, request)
 
@@ -231,10 +240,10 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
       throw apiError
     }
 
-    throw new ApiError({
-      message: 'Número máximo de tentativas excedido',
-      status: 0,
-    })
+    // Nunca deve chegar aqui sem um erro real: quando o loop se esgota via
+    // `continue` (ex.: refresh de token no último attempt), re-lançamos o
+    // último erro da API em vez de um erro sintético.
+    throw lastError ?? new ApiError({ message: 'Número máximo de tentativas excedido', status: 0 })
   }
 
   private buildHeaders(headers: Record<string, string> | undefined, token?: string): Headers {
@@ -288,10 +297,6 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
       return error.retryAfterSeconds * 1000
     }
     return exponentialBackoff(attempt, this.retry)
-  }
-
-  async getBearerToken(): Promise<string | undefined> {
-    return this.auth?.getToken()
   }
 }
 

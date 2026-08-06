@@ -26,7 +26,7 @@ async function main(): Promise<void> {
 
   // 1. Paginação assíncrona: todos os anúncios 'active', item a item.
   let total = 0
-  for await (const item of ml.items.list(siteId, { status: 'active', limit: 50 })) {
+  for await (const _item of ml.items.list(siteId, { status: 'active', limit: 50 })) {
     total++
   }
   console.log(`Encontrados ${total} anúncios ativos`)

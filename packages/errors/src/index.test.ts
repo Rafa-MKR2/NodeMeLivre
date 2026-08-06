@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   ApiError,
   ForbiddenError,
+  InputValidationError,
   NotFoundError,
   RateLimitError,
   toApiError,
@@ -58,5 +59,14 @@ describe('toApiError', () => {
   it('deve usar mensagem padrão quando a API não devolve message', () => {
     const err = toApiError(500, {}, headers())
     expect(err.message).toBe('Erro interno do Mercado Livre — tente novamente mais tarde')
+  })
+})
+
+describe('InputValidationError', () => {
+  it('deve ser um MercadoLivreError com nome correto', () => {
+    const err = new InputValidationError('Entrada inválida')
+    expect(err).toBeInstanceOf(InputValidationError)
+    expect(err.name).toBe('InputValidationError')
+    expect(err.message).toBe('Entrada inválida')
   })
 })

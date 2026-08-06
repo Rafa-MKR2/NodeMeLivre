@@ -1,6 +1,7 @@
 import { fakeTransport } from '@nodemelivre/core/test-utils'
+import { InputValidationError } from '@nodemelivre/errors'
 import { describe, expect, it } from 'vitest'
-import { Messages } from './messages.js'
+import { MESSAGE_TEXT_MAX_LENGTH, Messages } from './messages.js'
 
 const message = {
   id: 987654,
@@ -55,5 +56,32 @@ describe('Messages', () => {
         text: 'Olá, seu pedido foi enviado',
       },
     })
+  })
+
+  it('deve rejeitar texto acima do limite de caracteres', async () => {
+    const transport = fakeTransport(() => message)
+    const longText = 'a'.repeat(MESSAGE_TEXT_MAX_LENGTH + 1)
+
+    const err = await new Messages(transport)
+      .send({
+        from: { user_id: 123 },
+        to: { user_id: 456, resource: 'orders/1', site_id: 'MLB' },
+        text: longText,
+      })
+      .catch((e) => e)
+
+    expect(err).toBeInstanceOf(InputValidationError)
+    expect(transport.calls).toHaveLength(0)
+  })
+
+  it('deve aceitar texto exatamente no limite', async () => {
+    const transport = fakeTransport(() => message)
+    const text = 'a'.repeat(MESSAGE_TEXT_MAX_LENGTH)
+    await new Messages(transport).send({
+      from: { user_id: 123 },
+      to: { user_id: 456, resource: 'orders/1', site_id: 'MLB' },
+      text,
+    })
+    expect(transport.calls).toHaveLength(1)
   })
 })

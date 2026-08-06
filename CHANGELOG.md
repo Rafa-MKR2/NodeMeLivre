@@ -4,6 +4,26 @@ Todas as mudanças notáveis do monorepo serão documentadas neste arquivo.
 
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto adere ao [SemVer](https://semver.org/lang/pt-BR/). Veja o [processo de release](docs/releases/README.md).
 
+## [Não lançado]
+
+### Corrigido
+
+- `HttpClient`: a retentativa pós-refresh (401) não consome o orçamento de retry — `retry: false` ainda renova o token. Quando o loop se esgota, o **erro real da API** é re-lançado em vez de um `ApiError` sintético com `status 0`.
+- `DeduplicatingLogger`: o resumo de logs suprimidos agora é emitido quando a janela expira (antes o caminho era inalcançável e o resumo nunca aparecia).
+- `deepOmitEmpty`: preserva `null` intencional — enviar `null` em `PUT /items` continua limpando o campo (antes era removido do payload).
+
+### Alterado
+
+- `HttpClient`: headers de segurança (CSP, `X-Frame-Options`, `X-Content-Type-Options`...) deixam de ser injetados em requests por padrão — `securityHeaders` agora é `false` (headers de resposta pertencem ao servidor do integrador).
+- `RateLimiter`: tracking por recurso (`método:recurso`) em vez de path literal, e parsing robusto de `X-Rate-Limit-Reset` (epoch ms/segundos ou janela restante em segundos relativos).
+
+### Adicionado
+
+- `InputValidationError` em `@nodemelivre/errors` (validação de entrada no cliente, antes de enviar à API).
+- Validações: `Messages.send` rejeita texto acima de 350 caracteres; `Images.upload` rejeita arquivo vazio.
+- `Orders.waitUntilPaid` aceita `AbortSignal` para cancelamento antecipado do polling.
+- Testes para `resilience` (`parallel`/`ResilientTransport`), `OAuthStateStore` e `DeduplicatingLogger` — 147 testes no total.
+
 ## [1.0.0] - 2026-08-05
 
 ### Adicionado
