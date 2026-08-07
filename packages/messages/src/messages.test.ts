@@ -28,6 +28,20 @@ describe('Messages', () => {
     expect(transport.calls[0]?.query).toEqual({ tag: 'post_sale', mark_as_read: false })
   })
 
+  it('deve normalizar resposta objeto { messages: [...] } do ML', async () => {
+    // O ML às vezes devolve um objeto (com paging/from/to) em vez de array.
+    const transport = fakeTransport(() => ({ messages: [message], paging: { total: 1 } }))
+    const msgs = await new Messages(transport).list(2000000000, 123)
+    expect(msgs).toHaveLength(1)
+    expect(msgs[0]).toMatchObject({ id: 987654 })
+  })
+
+  it('deve devolver [] para resposta com formato inesperado (sem crash)', async () => {
+    const transport = fakeTransport(() => ({ foo: 'bar' }))
+    const msgs = await new Messages(transport).list(2000000000, 123)
+    expect(msgs).toEqual([])
+  })
+
   it('deve buscar uma mensagem pelo id', async () => {
     const transport = fakeTransport(() => message)
     await new Messages(transport).get(987654)

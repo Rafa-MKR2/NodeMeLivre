@@ -19,7 +19,7 @@ export class Messages {
    * Lista as mensagens de um pack (pedido/agrupamento de pedidos).
    * Todos os endpoints de mensagens usam `tag=post_sale`.
    */
-  list(
+  async list(
     packId: number | string,
     sellerId: number | string,
     params: MessagesListParams = {},
@@ -28,9 +28,11 @@ export class Messages {
     if (params.markAsRead !== undefined) {
       query.mark_as_read = params.markAsRead
     }
-    return this.transport.get(`/messages/packs/${packId}/sellers/${sellerId}`, {
-      query: toQuery(query),
-    })
+    const raw = await this.transport.get<unknown>(
+      `/messages/packs/${packId}/sellers/${sellerId}`,
+      { query: toQuery(query) },
+    )
+    return normalizeMessages(raw)
   }
 
   /** Detalhes de uma mensagem pelo id. */
@@ -47,4 +49,18 @@ export class Messages {
     }
     return this.transport.post('/messages', input, { query: { tag: 'post_sale' } })
   }
+}
+
+/**
+ * A API de mensagens do ML às vezes devolve um objeto `{ messages: [...] }`
+ * (com paging/from/to) em vez de um array direto. Normaliza para o contrato
+ * `Message[]` e nunca lança por formato inesperado (fallback `[]`).
+ */
+function normalizeMessages(raw: unknown): Message[] {
+  if (Array.isArray(raw)) return raw
+  if (typeof raw === 'object' && raw !== null) {
+    const record = raw as Record<string, unknown>
+    if (Array.isArray(record.messages)) return record.messages as Message[]
+  }
+  return []
 }
