@@ -6,6 +6,8 @@ export type ListingTypeId = 'free' | 'gold_special' | 'gold_pro' | 'gold' | 'sil
 
 export type ShippingMode = 'me1' | 'me2' | 'me_gratis' | 'custom' | 'not_specified'
 
+export type BuyingMode = 'buy_it_now' | 'classified'
+
 export interface ItemPicture {
   id: string
   url: string
@@ -62,7 +64,7 @@ export interface Item {
   currency_id: string
   available_quantity: number
   sold_quantity: number
-  buying_mode: 'buy_it_now'
+  buying_mode: BuyingMode
   listing_type_id: ListingTypeId
   condition: ItemCondition
   pictures?: ItemPicture[]
@@ -94,6 +96,7 @@ export interface ItemInput {
   available_quantity?: number
   condition?: ItemCondition
   listing_type_id?: ListingTypeId
+  buying_mode?: BuyingMode
   pictures?: { source: string }[]
   video_id?: string
   attributes?: ItemAttribute[]

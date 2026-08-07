@@ -1,4 +1,5 @@
 import { fakeTransport } from '@nodemelivre/core/test-utils'
+import { InputValidationError } from '@nodemelivre/errors'
 import { describe, expect, it } from 'vitest'
 import { Items } from './items.js'
 
@@ -132,5 +133,43 @@ describe('Items', () => {
       path: '/items/MLB1/status',
       body: { status: 'active' },
     })
+  })
+})
+
+describe('Items — validação de entrada', () => {
+  it('create rejeita sem título', async () => {
+    const items = new Items(fakeTransport(() => item))
+    await expect(items.create({ price: 10, available_quantity: 5 })).rejects.toThrow(
+      'title é obrigatório',
+    )
+    await expect(items.create({ price: 10, available_quantity: 5 })).rejects.toBeInstanceOf(
+      InputValidationError,
+    )
+  })
+
+  it('create rejeita preço não positivo', async () => {
+    const items = new Items(fakeTransport(() => item))
+    await expect(items.create({ title: 'x', price: 0, available_quantity: 5 })).rejects.toThrow(
+      'price deve ser um número positivo',
+    )
+    await expect(
+      items.create({ title: 'x', price: -1, available_quantity: 5 }),
+    ).rejects.toThrow('price')
+  })
+
+  it('update rejeita estoque não inteiro ou negativo', async () => {
+    const items = new Items(fakeTransport(() => item))
+    await expect(items.update('MLB1', { available_quantity: 1.5 })).rejects.toThrow(
+      'available_quantity deve ser um inteiro',
+    )
+    await expect(items.update('MLB1', { available_quantity: -2 })).rejects.toThrow(
+      'available_quantity',
+    )
+  })
+
+  it('update aceita campos parciais válidos', async () => {
+    const transport = fakeTransport(() => item)
+    await new Items(transport).update('MLB1', { price: 20 })
+    expect(transport.calls[0]).toMatchObject({ method: 'PUT', path: '/items/MLB1', body: { price: 20 } })
   })
 })

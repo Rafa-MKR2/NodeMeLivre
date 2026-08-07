@@ -5,6 +5,7 @@ import {
   type ResourceTransport,
   toQuery,
 } from '@nodemelivre/core'
+import { InputValidationError } from '@nodemelivre/errors'
 import type {
   Item,
   ItemDescription,
@@ -29,12 +30,14 @@ export class Items {
   }
 
   /** Cria um anúncio novo. */
-  create(input: ItemInput): Promise<Item> {
+  async create(input: ItemInput): Promise<Item> {
+    assertValidItemInput(input)
     return this.transport.post('/items', deepOmitEmpty(input))
   }
 
   /** Atualiza campos do anúncio. */
-  update(itemId: string, changes: Partial<ItemInput>): Promise<Item> {
+  async update(itemId: string, changes: Partial<ItemInput>): Promise<Item> {
+    assertValidItemInput(changes, { partial: true })
     return this.transport.put(`/items/${itemId}`, deepOmitEmpty(changes))
   }
 
@@ -90,5 +93,35 @@ export class Items {
       return this.publish(item.id)
     }
     return item
+  }
+}
+
+/**
+ * Valida campos essenciais antes de enviar à API (falha rápido, sem payload
+ * parcialmente inválido — mesmo padrão de `InputValidationError` de
+ * messages/images). Em atualização parcial, valida apenas os campos enviados.
+ */
+function assertValidItemInput(
+  input: Partial<ItemInput>,
+  { partial = false }: { partial?: boolean } = {},
+): void {
+  if (input.title !== undefined && (typeof input.title !== 'string' || input.title.trim() === '')) {
+    throw new InputValidationError('title deve ser uma string não vazia')
+  }
+  if (input.price !== undefined && (!Number.isFinite(input.price) || input.price <= 0)) {
+    throw new InputValidationError('price deve ser um número positivo')
+  }
+  if (
+    input.available_quantity !== undefined &&
+    (!Number.isInteger(input.available_quantity) || input.available_quantity < 0)
+  ) {
+    throw new InputValidationError('available_quantity deve ser um inteiro >= 0')
+  }
+  if (!partial) {
+    if (input.title === undefined) throw new InputValidationError('title é obrigatório na criação')
+    if (input.price === undefined) throw new InputValidationError('price é obrigatório na criação')
+    if (input.available_quantity === undefined) {
+      throw new InputValidationError('available_quantity é obrigatório na criação')
+    }
   }
 }
