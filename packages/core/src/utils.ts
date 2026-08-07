@@ -40,6 +40,7 @@ export function deepOmitEmpty<T>(value: T): T {
       const cleaned = deepOmitEmpty(val)
       if (cleaned === undefined) continue
       if (
+        cleaned !== null &&
         typeof cleaned === 'object' &&
         !Array.isArray(cleaned) &&
         Object.keys(cleaned).length === 0

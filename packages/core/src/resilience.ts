@@ -1,5 +1,5 @@
-import type { ResourceTransport } from '@nodemelivre/core'
 import { ApiError } from '@nodemelivre/errors'
+import type { ResourceTransport } from './transport.js'
 
 /** Resultado de uma operação que pode falhar parcialmente. */
 export interface PartialResult<T> {
