@@ -48,6 +48,7 @@ export interface RecordedCall {
   query: ResourceRequest['query']
   headers: Record<string, string>
   timeoutMs: number | undefined
+  signal: AbortSignal | undefined
 }
 
 /**
@@ -146,6 +147,7 @@ export class MockTransport implements ResourceTransport {
       query: request?.query,
       headers: request?.headers ?? {},
       timeoutMs: request?.timeoutMs,
+      signal: request?.signal,
     }
     this.calls.push(call)
 
@@ -214,6 +216,7 @@ export function fakeTransport(
       query: request?.query,
       headers: request?.headers ?? {},
       timeoutMs: request?.timeoutMs,
+      signal: request?.signal,
     }
     calls.push(call)
     return handler(call) as T

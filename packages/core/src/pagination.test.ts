@@ -102,4 +102,26 @@ describe('paginate', () => {
     await expect(iterate()).rejects.toThrow(/aborted/i)
     expect(fetchPage).not.toHaveBeenCalled()
   })
+
+  it('deve abortar entre os itens de uma mesma página', async () => {
+    const controller = new AbortController()
+    const fetchPage: PageFetcher<number> = vi.fn(async () => {
+      if (!controller.signal.aborted) {
+        // primeira página com 2 itens; aborta após o 1º yield
+        return page([1, 2, 3], 3, 0)
+      }
+      return page([], 3, 0)
+    })
+
+    const items: number[] = []
+    const iterate = async (): Promise<void> => {
+      for await (const n of paginate(fetchPage, { signal: controller.signal })) {
+        items.push(n)
+        controller.abort()
+      }
+    }
+    await expect(iterate()).rejects.toThrow(/aborted/i)
+    expect(items).toEqual([1])
+    expect(fetchPage).toHaveBeenCalledTimes(1)
+  })
 })

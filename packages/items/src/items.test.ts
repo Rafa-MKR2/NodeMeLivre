@@ -142,6 +142,68 @@ describe('Items', () => {
     expect(transport.calls[1]?.query).toEqual({ limit: 2, offset: 2 })
   })
 
+  it('list() deve repassar o signal à requisição em voo', async () => {
+    const controller = new AbortController()
+    const transport = fakeTransport(() => ({
+      results: [item],
+      paging: { total: 1, offset: 0, limit: 10 },
+    }))
+
+    for await (const _i of new Items(transport).list('MLB', {}, controller.signal)) {
+      // apenas consome
+    }
+
+    expect(transport.calls[0]?.path).toBe('/sites/MLB/search')
+    expect(transport.calls[0]?.signal).toBe(controller.signal)
+  })
+
+  it('listBySeller() deve repassar o signal à requisição em voo', async () => {
+    const controller = new AbortController()
+    const transport = fakeTransport((call) => {
+      if (call?.path?.startsWith('/users/')) {
+        return { results: ['MLB1'], paging: { total: 1, offset: 0, limit: 10 } }
+      }
+      return item
+    })
+
+    for await (const _i of new Items(transport).listBySeller(123, {}, controller.signal)) {
+      // apenas consome
+    }
+
+    expect(transport.calls[0]?.path).toBe('/users/123/items/search')
+    expect(transport.calls[0]?.signal).toBe(controller.signal)
+  })
+
+  it('searchBySeller deve resolver os IDs respeitando o limite de concorrência', async () => {
+    const ids = Array.from({ length: 25 }, (_, i) => `MLB${i + 1}`)
+    const transport = fakeTransport((call) => {
+      if (call?.path?.startsWith('/users/')) {
+        return { results: ids, paging: { total: ids.length, offset: 0, limit: 50 } }
+      }
+      return { id: call?.path?.split('/').at(-1), title: 'x', status: 'active' }
+    })
+
+    const page = await new Items(transport).searchBySeller(123)
+
+    expect(page.results).toHaveLength(25)
+    expect(page.results[0]?.id).toBe('MLB1')
+    expect(page.results[24]?.id).toBe('MLB25')
+    // 1 busca + 25 resoluções
+    expect(transport.calls).toHaveLength(26)
+  })
+
+  it('searchBySeller deve falhar rápido quando um ID não resolve', async () => {
+    const transport = fakeTransport((call) => {
+      if (call?.path?.startsWith('/users/')) {
+        return { results: ['MLB1', 'MLB2', 'MLB3'], paging: { total: 3, offset: 0, limit: 10 } }
+      }
+      if (call?.path === '/items/MLB2') throw new Error('item não encontrado')
+      return item
+    })
+
+    await expect(new Items(transport).searchBySeller(123)).rejects.toThrow('item não encontrado')
+  })
+
   it('deve publicar um anúncio', async () => {
     const transport = fakeTransport(() => ({ ...item, status: 'active' }))
     await new Items(transport).publish('MLB1')
