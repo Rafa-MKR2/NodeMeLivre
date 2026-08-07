@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": {
+      "@nodemelivre/core/test-utils": ["./packages/core/src/test-utils.ts"],
+      "@nodemelivre/core": ["./packages/core/src/index.ts"],
+      "@nodemelivre/errors": ["./packages/errors/src/index.ts"],
+      "@nodemelivre/http": ["./packages/http/src/index.ts"],
+      "@nodemelivre/types": ["./packages/types/src/index.ts"],
+      "@nodemelivre/auth": ["./packages/auth/src/index.ts"],
+      "@nodemelivre/items": ["./packages/items/src/index.ts"],
+      "@nodemelivre/messages": ["./packages/messages/src/index.ts"],
+      "@nodemelivre/orders": ["./packages/orders/src/index.ts"],
+      "@nodemelivre/users": ["./packages/users/src/index.ts"],
+      "@nodemelivre/shipments": ["./packages/shipments/src/index.ts"],
+      "@nodemelivre/questions": ["./packages/questions/src/index.ts"],
+      "@nodemelivre/webhooks": ["./packages/webhooks/src/index.ts"],
+      "@nodemelivre/images": ["./packages/images/src/index.ts"]
+    }
+  },
+  "include": ["examples/**/*.ts"]
+}
