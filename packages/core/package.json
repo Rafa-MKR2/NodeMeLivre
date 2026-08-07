@@ -29,6 +29,9 @@
   "dependencies": {
     "@nodemelivre/errors": "*"
   },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
   }

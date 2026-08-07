@@ -22,6 +22,9 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
   }
