@@ -14,7 +14,7 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 
 > **Critério de "versão sólida" (v1.0):** o integrador consegue, de ponta a ponta, autenticar, criar anúncio com foto e variação, paginar buscas, acompanhar vendas/perguntas/envios em tempo real e operar por chat — sem workaround manual.
 
-> Itens adiados para pós-v1.0 (não bloqueiam produção): PKCE (foco SPA/mobile), middleware/plugins, cache, métricas, `payments`/`billing`.
+> Itens adiados para pós-v1.0 (não bloqueiam produção): middleware/plugins, cache, métricas, `payments`/`billing`. **PKCE** foi antecipado: virou exigência do Mercado Livre para apps novos (troca do code sem `code_verifier` → `invalid_request`) e já está implementado na v1.0.x.
 
 ---
 
@@ -57,7 +57,7 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | **Cache** (ETag, `If-None-Match`, in-memory + pluggável) | Média | 2 dias | ⏳ Planejado |
 | **Métricas** (latência, taxa de erro, rate-limit remaining) | Média | 2 dias | ⏳ Planejado |
 | **Mocks avançados** (fixtures, scenarios, MSW integration) | Média | 2 dias | ⏳ Planejado |
-| **PKCE** no fluxo OAuth2 (foco SPA/mobile) | Média | 2 dias | ⏳ Planejado |
+| **PKCE** no fluxo OAuth2 (`OAuthOptions.pkce`, RFC 7636) | Média | 2 dias | ✔ Concluído |
 | **Resources extras** (payments, billing) | Baixa | 5 dias | ⏳ Planejado |
 
 ---

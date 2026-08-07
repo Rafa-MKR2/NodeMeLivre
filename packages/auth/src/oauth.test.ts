@@ -167,6 +167,125 @@ describe('OAuthClient.exchangeCode', () => {
   })
 })
 
+describe('OAuthClient PKCE (RFC 7636)', () => {
+  it('deve incluir code_challenge e code_challenge_method=S256 na URL de autorização', () => {
+    const url = client().authorizationUrl({ redirectUri: 'https://app.com/callback', state: 's1' })
+    expect(url).not.toContain('code_challenge')
+  })
+
+  it('deve incluir code_challenge (S256) na URL quando pkce=true', () => {
+    const ml = new OAuthClient({ clientId: 'APP_ID', clientSecret: 'SECRET', pkce: true })
+    const url = ml.authorizationUrl({ redirectUri: 'https://app.com/callback', state: 's1' })
+
+    const parsed = new URL(url)
+    expect(parsed.searchParams.get('code_challenge_method')).toBe('S256')
+    expect(parsed.searchParams.get('code_challenge')).toBeTruthy()
+  })
+
+  it('deve usar method=plain quando configurado', () => {
+    const ml = new OAuthClient({
+      clientId: 'APP_ID',
+      clientSecret: 'SECRET',
+      pkce: { method: 'plain' },
+    })
+    const url = ml.authorizationUrl({ redirectUri: 'https://app.com/callback', state: 's1' })
+
+    const parsed = new URL(url)
+    expect(parsed.searchParams.get('code_challenge_method')).toBe('plain')
+    const challenge = parsed.searchParams.get('code_challenge')
+    expect(ml.getCodeVerifier('s1')).toBe(challenge)
+  })
+
+  it('deve armazenar o code_verifier por state e recuperá-lo na troca', async () => {
+    const spy = mockFetch((_url, init) => {
+      const body = JSON.parse(String(init.body))
+      expect(body.grant_type).toBe('authorization_code')
+      expect(body.code_verifier).toBeTruthy()
+      return json({
+        access_token: 'access-1',
+        token_type: 'bearer',
+        expires_in: 21600,
+        scope: 'offline_access read write',
+        user_id: 987,
+        refresh_token: 'refresh-1',
+      })
+    })
+
+    const ml = new OAuthClient({ clientId: 'APP_ID', clientSecret: 'SECRET', pkce: true })
+    ml.authorizationUrl({ redirectUri: 'https://app.com/callback', state: 's1' })
+
+    const token = await ml.exchangeCode('code-1', {
+      redirectUri: 'https://app.com/callback',
+      state: 's1',
+    })
+
+    expect(token.accessToken).toBe('access-1')
+    expect(spy).toHaveBeenCalledTimes(1)
+    // O verifier é recuperado apenas uma vez (estado não expirado mantém o valor).
+    expect(ml.getCodeVerifier('s1')).toBeTruthy()
+  })
+
+  it('deve aceitar codeVerifier explícito (PKCE gerenciado pelo chamador)', async () => {
+    mockFetch((_url, init) => {
+      const body = JSON.parse(String(init.body))
+      expect(body.code_verifier).toBe('verifier-explicito')
+      return json({
+        access_token: 'access-1',
+        token_type: 'bearer',
+        expires_in: 21600,
+        scope: 'read',
+      })
+    })
+
+    const ml = new OAuthClient({ clientId: 'APP_ID', clientSecret: 'SECRET', pkce: true })
+    const token = await ml.exchangeCode('code-1', {
+      redirectUri: 'https://app.com/callback',
+      codeVerifier: 'verifier-explicito',
+    })
+
+    expect(token.accessToken).toBe('access-1')
+  })
+
+  it('não deve enviar code_verifier quando pkce está desabilitado', async () => {
+    mockFetch((_url, init) => {
+      const body = JSON.parse(String(init.body))
+      expect(body.code_verifier).toBeUndefined()
+      return json({
+        access_token: 'access-1',
+        token_type: 'bearer',
+        expires_in: 21600,
+        scope: 'read',
+      })
+    })
+
+    const token = await client().exchangeCode('code-1', {
+      redirectUri: 'https://app.com/callback',
+      state: 's1',
+    })
+    expect(token.accessToken).toBe('access-1')
+  })
+
+  it('deve expor error_description ou message do ML no OAuthError', async () => {
+    mockFetch(() =>
+      json(
+        {
+          error: 'invalid_request',
+          message:
+            'the following parameters are required: grant_type, client_id, code, redirect_uri',
+        },
+        400,
+      ),
+    )
+
+    const err = await client()
+      .exchangeCode('code-1', { redirectUri: 'https://app.com/callback' })
+      .catch((e) => e)
+    expect(err).toBeInstanceOf(OAuthError)
+    expect(err.oauthError).toBe('invalid_request')
+    expect(err.message).toContain('required: grant_type')
+  })
+})
+
 describe('OAuthClient.getAppToken', () => {
   it('deve pedir token de aplicação com client_credentials', async () => {
     mockFetch((_url, init) => {

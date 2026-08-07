@@ -6,6 +6,7 @@ import {
   type OAuthOptions,
   type OAuthStateEntry,
   type OAuthStateStore,
+  type PkceMethod,
   TokenManager,
   type TokenManagerOptions,
   type TokenStore,
@@ -54,6 +55,11 @@ export interface MercadoLivreOptions {
   tokenStore?: TokenStore
   /** Store de estados OAuth para proteção CSRF no fluxo de autorização. */
   stateStore?: OAuthStateStore
+  /**
+   * Habilita PKCE (RFC 7636) no fluxo OAuth2 — obrigatório para apps com o
+   * fluxo PKCE habilitado no painel do Mercado Livre. Padrão: desabilitado.
+   */
+  pkce?: boolean | { method?: PkceMethod }
   /** Controle de rate limit por recurso. Padrão: instância nova. */
   rateLimiter?: RateLimiter
   /** Fetch injetável (útil em testes). */
@@ -100,6 +106,7 @@ export class MercadoLivre {
     if (options.baseUrl !== undefined) oauthOptions.baseUrl = options.baseUrl
     if (options.fetchImpl !== undefined) oauthOptions.fetchImpl = options.fetchImpl
     if (options.stateStore !== undefined) oauthOptions.stateStore = options.stateStore
+    if (options.pkce !== undefined) oauthOptions.pkce = options.pkce
     this.auth = new OAuthClient(oauthOptions)
 
     const tokenStore = options.tokenStore ?? new InMemoryTokenStore()
@@ -159,9 +166,20 @@ export class MercadoLivre {
     return this.auth.consumeState(state)
   }
 
-  /** Troca o `code` recebido no redirect por um token e persiste na store. */
-  async authenticate(redirectUri: string, code: string): Promise<AccessToken> {
-    return this.tokens.saveAuthorizationCode(code, redirectUri)
+  /**
+   * Troca o `code` recebido no redirect por um token e persiste na store.
+   *
+   * Com PKCE habilitado, informe o mesmo `state` usado em `authorizationUrl`
+   * para o SDK recuperar o `code_verifier` correspondente (ou passe o
+   * `codeVerifier` explicitamente).
+   */
+  async authenticate(
+    redirectUri: string,
+    code: string,
+    state?: string,
+    codeVerifier?: string,
+  ): Promise<AccessToken> {
+    return this.tokens.saveAuthorizationCode(code, redirectUri, state, codeVerifier)
   }
 }
 

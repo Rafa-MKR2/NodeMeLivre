@@ -1,5 +1,7 @@
 export type { AuthorizationUrlOptions, OAuthOptions, TokenGrantOptions } from './oauth.js'
 export { OAuthClient } from './oauth.js'
+export type { PkceMethod } from './pkce.js'
+export { generateCodeChallenge, generateCodeVerifier } from './pkce.js'
 export type { TokenManagerEvents, TokenManagerOptions } from './refresh.js'
 export { TokenManager } from './refresh.js'
 export type { OAuthStateEntry, OAuthStateStoreOptions } from './state.js'

@@ -25,6 +25,8 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Adicionado
 
+- **PKCE (RFC 7636) no fluxo OAuth2** (`OAuthOptions.pkce` / `MercadoLivreOptions.pkce`): `authorizationUrl` inclui `code_challenge` + `code_challenge_method` (S256 padrão, `plain` opcional) e a troca do code envia `code_verifier` — exigência do Mercado Livre para apps com o fluxo PKCE habilitado (sem ele, o `/oauth/token` responde `invalid_request`). O `code_verifier` é gerado e armazenado por `state` (recuperado ao informar o mesmo `state` em `authenticate(redirectUri, code, state)`), com `codeVerifier` explícito como alternativa. `generateCodeVerifier`/`generateCodeChallenge` exportados.
+- `OAuthClient`: `OAuthError` agora expõe o `message` do ML quando `error_description` não vem (ex.: `invalid_request` com detalhe "the following parameters are required...").
 - `OAuthStateStore` integrado ao `OAuthClient`: com `stateStore` configurado, `authorizationUrl` gera/armazena o `state` automaticamente (CSRF) e `consumeState` valida o state recebido no callback. Exposto no facade via `ml.consumeState()` e opção `stateStore` em `MercadoLivreOptions`.
 - `OAuthClient`: valida `clientId`/`clientSecret` no construtor — uso direto sem credenciais lança `ConfigurationError` com mensagem clara (antes gerava URL quebrada ou erro vindo da API).
 - `InputValidationError` em `@nodemelivre/errors` (validação de entrada no cliente, antes de enviar à API).

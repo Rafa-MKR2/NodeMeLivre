@@ -1,10 +1,12 @@
 import { ApiError, ConfigurationError, OAuthError } from '@nodemelivre/errors'
 import { HttpClient, type HttpClientOptions } from '@nodemelivre/http'
+import { generateCodeChallenge, generateCodeVerifier, type PkceMethod } from './pkce.js'
 import type { OAuthStateEntry, OAuthStateStore } from './state.js'
 import type { AccessToken } from './token.js'
 
 const TOKEN_PATH = '/oauth/token'
 const DEFAULT_SITE_ID = 'MLB'
+const PKCE_TTL_MS = 10 * 60 * 1000 // mesma janela dos states
 
 /** Domínios de autorização por site. Brasil usa mercadolivre, os demais mercadolibre. */
 const AUTH_DOMAINS: Record<string, string> = {
@@ -44,6 +46,14 @@ export interface OAuthOptions {
    * `consumeState` valida o state recebido no callback.
    */
   stateStore?: OAuthStateStore
+  /**
+   * Habilita PKCE (RFC 7636) no fluxo `authorization_code`.
+   *
+   * A partir de 2025/2026 o Mercado Livre exige `code_verifier` para
+   * aplicações com o fluxo PKCE habilitado — sem ele a troca do code falha
+   * com `invalid_request`. Padrão: desabilitado (compatível com apps antigos).
+   */
+  pkce?: boolean | { method?: PkceMethod }
 }
 
 export interface AuthorizationUrlOptions {
@@ -56,6 +66,14 @@ export interface AuthorizationUrlOptions {
 
 export interface TokenGrantOptions {
   redirectUri?: string
+  /**
+   * State usado na autorização — necessário para o SDK recuperar o
+   * `code_verifier` gerado (PKCE). Pode ser omitido quando `codeVerifier`
+   * é passado explicitamente ou quando o fluxo PKCE está desabilitado.
+   */
+  state?: string
+  /** Code verifier explícito (quando o chamador gerencia o próprio PKCE). */
+  codeVerifier?: string
 }
 
 /** Resposta crua do endpoint /oauth/token. */
@@ -66,6 +84,11 @@ interface OAuthTokenResponse {
   scope: string
   user_id?: number
   refresh_token?: string
+}
+
+interface StoredCodeVerifier {
+  verifier: string
+  createdAt: number
 }
 
 /**
@@ -81,6 +104,9 @@ export class OAuthClient {
   private readonly clientSecret: string
   private readonly siteId: string
   private readonly httpClient: HttpClient
+  private readonly pkceEnabled: boolean
+  private readonly pkceMethod: PkceMethod
+  private readonly codeVerifiers = new Map<string, StoredCodeVerifier>()
   readonly stateStore: OAuthStateStore | undefined
 
   constructor(options: OAuthOptions) {
@@ -94,6 +120,10 @@ export class OAuthClient {
     this.siteId = options.siteId ?? DEFAULT_SITE_ID
     this.httpClient = options.httpClient ?? buildTokenClient(options)
     this.stateStore = options.stateStore
+    const pkce = options.pkce ?? false
+    this.pkceEnabled = pkce === true || (typeof pkce === 'object' && pkce !== null)
+    this.pkceMethod =
+      typeof pkce === 'object' && pkce !== null && pkce.method !== undefined ? pkce.method : 'S256'
   }
 
   /** URL para redirecionar o vendedor ao navegador de autorização do Mercado Livre. */
@@ -106,6 +136,15 @@ export class OAuthClient {
     const state = this.resolveState(options)
     if (state !== undefined) {
       url.searchParams.set('state', state)
+    }
+
+    if (this.pkceEnabled) {
+      const verifier = generateCodeVerifier()
+      url.searchParams.set('code_challenge', generateCodeChallenge(verifier, this.pkceMethod))
+      url.searchParams.set('code_challenge_method', this.pkceMethod)
+      if (state !== undefined) {
+        this.codeVerifiers.set(state, { verifier, createdAt: Date.now() })
+      }
     }
     return url.toString()
   }
@@ -120,6 +159,17 @@ export class OAuthClient {
     return this.stateStore?.consume(state) ?? null
   }
 
+  /** Code verifier ativo para um state (PKCE), se ainda não expirado. */
+  getCodeVerifier(state: string): string | undefined {
+    const stored = this.codeVerifiers.get(state)
+    if (stored === undefined) return undefined
+    if (Date.now() - stored.createdAt > PKCE_TTL_MS) {
+      this.codeVerifiers.delete(state)
+      return undefined
+    }
+    return stored.verifier
+  }
+
   private resolveState(options: AuthorizationUrlOptions): string | undefined {
     if (this.stateStore === undefined) return options.state
     if (options.state !== undefined) {
@@ -131,12 +181,18 @@ export class OAuthClient {
 
   /** Troca o código de autorização por um AccessToken. */
   async exchangeCode(code: string, options: TokenGrantOptions): Promise<AccessToken> {
-    const body = {
+    const body: Record<string, string | undefined> = {
       grant_type: 'authorization_code',
       client_id: this.clientId,
       client_secret: this.clientSecret,
       code,
       redirect_uri: options.redirectUri,
+    }
+    if (this.pkceEnabled) {
+      const verifier =
+        options.codeVerifier ??
+        (options.state !== undefined ? this.getCodeVerifier(options.state) : undefined)
+      if (verifier !== undefined) body.code_verifier = verifier
     }
     return this.tokenRequest(body)
   }
@@ -176,7 +232,7 @@ export class OAuthClient {
       return toAccessToken(response)
     } catch (error) {
       if (error instanceof ApiError && isOAuthErrorBody(error.body)) {
-        throw new OAuthError(error.body.error, error.body.error_description)
+        throw new OAuthError(error.body.error, error.body.error_description ?? error.body.message)
       }
       throw error
     }
@@ -209,7 +265,9 @@ function toAccessToken(response: OAuthTokenResponse): AccessToken {
   return token
 }
 
-function isOAuthErrorBody(body: unknown): body is { error: string; error_description?: string } {
+function isOAuthErrorBody(
+  body: unknown,
+): body is { error: string; error_description?: string; message?: string } {
   if (typeof body !== 'object' || body === null) return false
   const record = body as Record<string, unknown>
   return typeof record.error === 'string'

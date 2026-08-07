@@ -56,8 +56,16 @@ export class TokenManager extends EventEmitter<TokenManagerEvents> implements To
   }
 
   /** Persiste o resultado da troca do authorization_code. */
-  async saveAuthorizationCode(code: string, redirectUri: string): Promise<AccessToken> {
-    const token = await this.oauth.exchangeCode(code, { redirectUri })
+  async saveAuthorizationCode(
+    code: string,
+    redirectUri: string,
+    state?: string,
+    codeVerifier?: string,
+  ): Promise<AccessToken> {
+    const grant: { redirectUri: string; state?: string; codeVerifier?: string } = { redirectUri }
+    if (state !== undefined) grant.state = state
+    if (codeVerifier !== undefined) grant.codeVerifier = codeVerifier
+    const token = await this.oauth.exchangeCode(code, grant)
     await this.store.set(token)
     return token
   }
