@@ -37,7 +37,7 @@ async function main(): Promise<void> {
   }
 
   const answered = await ml.questions.answer({ questionId: 123, text: 'Sim, temos!' })
-  console.log(`Resposta ${answered.id} enviada`)
+  console.log(`Resposta enviada: ${answered.text} (${answered.status})`)
 }
 
 main().catch((error) => {

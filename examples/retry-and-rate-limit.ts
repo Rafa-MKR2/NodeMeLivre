@@ -21,7 +21,7 @@ async function main(): Promise<void> {
     clientSecret,
     siteId: 'MLB',
     // Até 3 tentativas em 5xx/timeout, com backoff.
-    retry: { maxRetries: 3, backoffMs: 500, maxBackoffMs: 5_000 },
+    retry: { maxRetries: 3, baseDelayMs: 500, maxDelayMs: 5_000 },
     // 30s por requisição; a requisição é abortada acima disso.
     defaultTimeoutMs: 30_000,
     rateLimiter,
