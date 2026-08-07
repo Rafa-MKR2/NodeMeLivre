@@ -16,7 +16,8 @@
       "@nodemelivre/shipments": ["./packages/shipments/src/index.ts"],
       "@nodemelivre/questions": ["./packages/questions/src/index.ts"],
       "@nodemelivre/webhooks": ["./packages/webhooks/src/index.ts"],
-      "@nodemelivre/images": ["./packages/images/src/index.ts"]
+      "@nodemelivre/images": ["./packages/images/src/index.ts"],
+      "@nodemelivre/sdk": ["./packages/sdk/src/index.ts"]
     }
   },
   "include": ["examples/**/*.ts"]
