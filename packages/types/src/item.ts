@@ -56,6 +56,7 @@ export interface Item {
   id: string
   site_id: string
   title: string
+  family_name?: string
   subtitle?: string
   seller_id: number
   category_id: string
@@ -89,7 +90,18 @@ export interface Item {
 /** Payload para criação/atualização de item. */
 export interface ItemInput {
   site_id?: string
+  /**
+   * Título do anúncio (modelo legado). Em contas migradas para o modelo
+   * "User Product" (famílias de produtos) o ML exige `family_name` e
+   * rejeita `title` com o erro 369/374 — envie apenas um dos dois.
+   */
   title?: string
+  /**
+   * Nome da família do produto (modelo "User Product"). Quando presente,
+   * o ML gera o título publicável automaticamente a partir do family_name
+   * + atributos; `title` não deve ser enviado junto.
+   */
+  family_name?: string
   category_id?: string
   price?: number
   currency_id?: string

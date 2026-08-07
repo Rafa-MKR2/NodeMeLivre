@@ -188,14 +188,44 @@ describe('Items', () => {
 })
 
 describe('Items — validação de entrada', () => {
-  it('create rejeita sem título', async () => {
+  it('create rejeita sem title nem family_name', async () => {
     const items = new Items(fakeTransport(() => item))
     await expect(items.create({ price: 10, available_quantity: 5 })).rejects.toThrow(
-      'title é obrigatório',
+      'title ou family_name é obrigatório',
     )
     await expect(items.create({ price: 10, available_quantity: 5 })).rejects.toBeInstanceOf(
       InputValidationError,
     )
+  })
+
+  it('create aceita family_name (modelo User Product) em vez de title', async () => {
+    const transport = fakeTransport(() => ({
+      ...item,
+      family_name: 'Fone Bluetooth TWS',
+      title: 'Fone Bluetooth TWS',
+    }))
+    const input = { family_name: 'Fone Bluetooth TWS', price: 10, available_quantity: 5 }
+    await new Items(transport).create(input)
+    expect(transport.calls[0]).toMatchObject({ method: 'POST', path: '/items', body: input })
+  })
+
+  it('create rejeita title e family_name juntos (mutuamente exclusivos)', async () => {
+    const items = new Items(fakeTransport(() => item))
+    await expect(
+      items.create({
+        title: 'Título antigo',
+        family_name: 'Família nova',
+        price: 10,
+        available_quantity: 5,
+      }),
+    ).rejects.toThrow('mutuamente exclusivos')
+  })
+
+  it('create rejeita family_name vazio', async () => {
+    const items = new Items(fakeTransport(() => item))
+    await expect(
+      items.create({ family_name: '', price: 10, available_quantity: 5 }),
+    ).rejects.toThrow('family_name deve ser uma string não vazia')
   })
 
   it('create rejeita preço não positivo', async () => {

@@ -178,6 +178,17 @@ function assertValidItemInput(
   if (input.title !== undefined && (typeof input.title !== 'string' || input.title.trim() === '')) {
     throw new InputValidationError('title deve ser uma string não vazia')
   }
+  if (
+    input.family_name !== undefined &&
+    (typeof input.family_name !== 'string' || input.family_name.trim() === '')
+  ) {
+    throw new InputValidationError('family_name deve ser uma string não vazia')
+  }
+  if (input.title !== undefined && input.family_name !== undefined) {
+    throw new InputValidationError(
+      'title e family_name são mutuamente exclusivos: envie apenas um (modelo User Product)',
+    )
+  }
   if (input.price !== undefined && (!Number.isFinite(input.price) || input.price <= 0)) {
     throw new InputValidationError('price deve ser um número positivo')
   }
@@ -188,7 +199,9 @@ function assertValidItemInput(
     throw new InputValidationError('available_quantity deve ser um inteiro >= 0')
   }
   if (!partial) {
-    if (input.title === undefined) throw new InputValidationError('title é obrigatório na criação')
+    if (input.title === undefined && input.family_name === undefined) {
+      throw new InputValidationError('title ou family_name é obrigatório na criação')
+    }
     if (input.price === undefined) throw new InputValidationError('price é obrigatório na criação')
     if (input.available_quantity === undefined) {
       throw new InputValidationError('available_quantity é obrigatório na criação')
