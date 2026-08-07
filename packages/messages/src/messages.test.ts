@@ -42,6 +42,43 @@ describe('Messages', () => {
     expect(msgs).toEqual([])
   })
 
+  it('conversation expõe o envelope com from/to (Agente) e messages', async () => {
+    const transport = fakeTransport(() => ({
+      pack_id: 2000000000,
+      from: { user_id: 123, nickname: 'vendedor' },
+      to: { user_id: 789, nickname: 'Agente MLB' },
+      messages: [message],
+    }))
+    const convo = await new Messages(transport).conversation(2000000000, 123)
+
+    expect(convo.messages).toHaveLength(1)
+    expect(convo.from?.user_id).toBe(123)
+    expect(convo.to?.user_id).toBe(789)
+    expect(transport.calls[0]?.path).toBe('/messages/packs/2000000000/sellers/123')
+    expect(transport.calls[0]?.query).toEqual({ tag: 'post_sale' })
+  })
+
+  it('conversation trata array direto e markAsRead=false', async () => {
+    const transport = fakeTransport(() => [message])
+    const convo = await new Messages(transport).conversation(2000000000, 123, { markAsRead: false })
+    expect(convo.messages).toHaveLength(1)
+    expect(convo.to).toBeUndefined()
+    expect(transport.calls[0]?.query).toEqual({ tag: 'post_sale', mark_as_read: false })
+  })
+
+  it('conversation aceita participante com id em vez de user_id', async () => {
+    const transport = fakeTransport(() => ({ to: { id: 789 }, messages: [] }))
+    const convo = await new Messages(transport).conversation(2000000000, 123)
+    expect(convo.to?.user_id).toBe(789)
+  })
+
+  it('conversation não lança em formato inesperado', async () => {
+    const transport = fakeTransport(() => 'estranho')
+    const convo = await new Messages(transport).conversation(2000000000, 123)
+    expect(convo.messages).toEqual([])
+    expect(convo.to).toBeUndefined()
+  })
+
   it('deve buscar uma mensagem pelo id', async () => {
     const transport = fakeTransport(() => message)
     await new Messages(transport).get(987654)

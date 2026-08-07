@@ -5,5 +5,5 @@ export type {
   MessageSendInput,
   MessageUser,
 } from '@nodemelivre/types'
-export type { MessagesListParams } from './messages.js'
+export type { MessagesConversation, MessagesListParams } from './messages.js'
 export { Messages } from './messages.js'
