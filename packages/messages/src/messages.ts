@@ -59,10 +59,9 @@ export class Messages {
     if (params.markAsRead !== undefined) {
       query.mark_as_read = params.markAsRead
     }
-    const raw = await this.transport.get<unknown>(
-      `/messages/packs/${packId}/sellers/${sellerId}`,
-      { query: toQuery(query) },
-    )
+    const raw = await this.transport.get<unknown>(`/messages/packs/${packId}/sellers/${sellerId}`, {
+      query: toQuery(query),
+    })
     return normalizeConversation(raw)
   }
 
