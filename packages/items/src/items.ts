@@ -1,5 +1,6 @@
 import {
   deepOmitEmpty,
+  mapWithConcurrency,
   type PageFetcher,
   paginate,
   type ResourceTransport,
@@ -66,12 +67,17 @@ export class Items {
    * }
    * ```
    */
-  list(siteId: string, params: ItemSearchParams = {}): AsyncGenerator<Item, void, void> {
-    const fetchPage: PageFetcher<Item> = (offset, limit) =>
+  list(
+    siteId: string,
+    params: ItemSearchParams = {},
+    signal?: AbortSignal,
+  ): AsyncGenerator<Item, void, void> {
+    const fetchPage: PageFetcher<Item> = (offset, limit, pageSignal) =>
       this.transport.get<ItemSearchResponse>(`/sites/${siteId}/search`, {
         query: toQuery({ ...params, offset, limit }),
+        ...(pageSignal !== undefined ? { signal: pageSignal } : {}),
       })
-    return paginate(fetchPage, params.limit === undefined ? {} : { limit: params.limit })
+    return paginate(fetchPage, paginationOptions(params, signal))
   }
 
   /**
@@ -113,18 +119,20 @@ export class Items {
    * }
    * ```
    */
-  listBySeller(sellerId: number, params: ItemSearchParams = {}): AsyncGenerator<Item, void, void> {
-    const fetchPage: PageFetcher<Item> = async (offset, limit) => {
-      const page = await this.transport.get<ItemSearchResponse>(
-        `/users/${sellerId}/items/search`,
-        {
-          query: toQuery({ ...params, offset, limit }),
-        },
-      )
+  listBySeller(
+    sellerId: number,
+    params: ItemSearchParams = {},
+    signal?: AbortSignal,
+  ): AsyncGenerator<Item, void, void> {
+    const fetchPage: PageFetcher<Item> = async (offset, limit, pageSignal) => {
+      const page = await this.transport.get<ItemSearchResponse>(`/users/${sellerId}/items/search`, {
+        query: toQuery({ ...params, offset, limit }),
+        ...(pageSignal !== undefined ? { signal: pageSignal } : {}),
+      })
       const results = await resolveSellerItems(this.transport, page.results)
       return { ...page, results }
     }
-    return paginate(fetchPage, params.limit === undefined ? {} : { limit: params.limit })
+    return paginate(fetchPage, paginationOptions(params, signal))
   }
   /** Publica um anúncio (alias de `updateStatus('active')`). */
   publish(itemId: string): Promise<Item> {
@@ -153,8 +161,12 @@ export class Items {
 /**
  * O endpoint `/users/{seller_id}/items/search` devolve apenas os IDs dos
  * anúncios em `results` (array de strings). Resolve cada ID para o item
- * completo em paralelo, mantendo o contrato `results: Item[]`.
+ * completo respeitando um limite de requisições paralelas — sem isso, um
+ * vendedor com milhares de anúncios estouraria o rate limit da API com uma
+ * rajada de `GET /items/{id}`.
  */
+const ITEM_RESOLUTION_CONCURRENCY = 10
+
 async function resolveSellerItems(
   transport: ResourceTransport,
   results: unknown[],
@@ -163,7 +175,9 @@ async function resolveSellerItems(
     .map((entry) => (typeof entry === 'string' ? entry : (entry as Item | null)?.id))
     .filter((id): id is string => typeof id === 'string' && id !== '')
   if (ids.length === 0) return []
-  return Promise.all(ids.map((id) => transport.get<Item>(`/items/${id}`)))
+  return mapWithConcurrency(ids, ITEM_RESOLUTION_CONCURRENCY, (id) =>
+    transport.get<Item>(`/items/${id}`),
+  )
 }
 
 /**
@@ -207,4 +221,15 @@ function assertValidItemInput(
       throw new InputValidationError('available_quantity é obrigatório na criação')
     }
   }
+}
+
+/** Monta as opções do `paginate()` sem passar `undefined` explícito. */
+function paginationOptions(
+  params: ItemSearchParams,
+  signal: AbortSignal | undefined,
+): { limit?: number; signal?: AbortSignal } {
+  const options: { limit?: number; signal?: AbortSignal } = {}
+  if (params.limit !== undefined) options.limit = params.limit
+  if (signal !== undefined) options.signal = signal
+  return options
 }

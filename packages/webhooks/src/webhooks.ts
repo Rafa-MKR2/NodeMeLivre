@@ -42,6 +42,29 @@ export class Webhooks {
   }
 
   /**
+   * `verify` + validação do dono: além do `application_id`, confere que a
+   * notificação é do usuário esperado (o `user_id` cujo token você possui).
+   *
+   * Como o Mercado Livre não assina webhooks, o `application_id` é público —
+   * validar o `user_id` contra o vendedor autenticado é o controle real para
+   * rejeitar notificações forjadas de outros vendedores antes de gastar
+   * chamadas à API.
+   */
+  verifyForUser(
+    payload: unknown,
+    applicationId: number | string,
+    expectedUserId: number | string,
+  ): WebhookNotification {
+    const notification = this.verify(payload, applicationId)
+    if (notification.user_id !== Number(expectedUserId)) {
+      throw new WebhookError(
+        `Webhook rejeitado: user_id ${notification.user_id} não pertence ao vendedor ${expectedUserId}`,
+      )
+    }
+    return notification
+  }
+
+  /**
    * Converte o corpo bruto do callback em uma notificação tipada.
    * Aceita a string do body ou o objeto já parseado.
    */

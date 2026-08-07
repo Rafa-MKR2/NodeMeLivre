@@ -6,7 +6,16 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ## [Não lançado]
 
+### Adicionado
+
+- `mapWithConcurrency()` em `@nodemelivre/core`: aplica um mapper respeitando limite de execuções paralelas, preservando a ordem — usado pela resolução de itens do vendedor.
+- `Items.list`/`listBySeller` e `paginate()` aceitam `AbortSignal`: cancelamento antecipado da iteração e da requisição em voo (o `for await` rejeita com AbortError).
+- `Images.uploadFromUrl(url)` em `@nodemelivre/images`: registra imagem a partir de uma URL pública (`POST /pictures`), validando protocolo http(s) — sem depender do Nível 1 do SDK.
+- `Webhooks.verifyForUser(payload, applicationId, expectedUserId)` em `@nodemelivre/webhooks`: valida `application_id` e o `user_id` da notificação contra o vendedor esperado — controle real contra payloads forjados (o ML não usa HMAC).
+
 ### Corrigido
+
+- `Items.searchBySeller`/`listBySeller`: resolução de IDs em itens completos agora respeita um limite de concorrência (10) em vez de `Promise.all` sem cap — evita rajada de requisições que estoura o rate limit em contas com milhares de anúncios.
 
 - `HttpClient`: a retentativa pós-refresh (401) não consome o orçamento de retry — `retry: false` ainda renova o token. Quando o loop se esgota, o **erro real da API** é re-lançado em vez de um `ApiError` sintético com `status 0`.
 - `DeduplicatingLogger`: o resumo de logs suprimidos agora é emitido quando a janela expira (antes o caminho era inalcançável e o resumo nunca aparecia).

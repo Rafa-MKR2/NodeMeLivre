@@ -24,7 +24,11 @@ export interface PaginatedResponse<T> {
   }
 }
 
-export type PageFetcher<T> = (offset: number, limit: number) => Promise<PaginatedResponse<T>>
+export type PageFetcher<T> = (
+  offset: number,
+  limit: number,
+  signal?: AbortSignal,
+) => Promise<PaginatedResponse<T>>
 
 /**
  * Itera todos os resultados de uma busca paginada, item a item.
@@ -32,18 +36,24 @@ export type PageFetcher<T> = (offset: number, limit: number) => Promise<Paginate
  * - Página vazia ou fim do `paging.total` encerra a iteração.
  * - O consumidor pode parar cedo com `break`.
  * - `offset` inicial e tamanho de página são configuráveis.
+ * - Com `signal`, a iteração aborta entre páginas (o fetcher decide se
+ *   repassa o signal à requisição em voo) e o `for await` rejeita com um
+ *   erro do tipo AbortError.
  */
 export async function* paginate<T>(
   fetchPage: PageFetcher<T>,
-  options: { offset?: number; limit?: number } = {},
+  options: { offset?: number; limit?: number; signal?: AbortSignal } = {},
 ): AsyncGenerator<T, void, void> {
   const limit = options.limit ?? 50
   let offset = options.offset ?? 0
+  const signal = options.signal
 
   while (true) {
-    const page = await fetchPage(offset, limit)
+    signal?.throwIfAborted()
+    const page = await fetchPage(offset, limit, signal)
     const results = page.results
     for (const item of results) {
+      signal?.throwIfAborted()
       yield item
     }
 

@@ -54,6 +54,36 @@ export function deepOmitEmpty<T>(value: T): T {
   return value
 }
 
+/**
+ * Aplica `mapper` a cada item respeitando um limite de execuções paralelas.
+ *
+ * Mantém a ordem dos resultados (igual ao `Array.prototype.map`) e nunca
+ * lança mais do que a primeira rejeição do mapper. Útil para operações N+1
+ * (ex.: resolver IDs em objetos completos) sem estourar rate limit da API.
+ */
+export async function mapWithConcurrency<T, R>(
+  items: readonly T[],
+  limit: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const safeLimit = Number.isInteger(limit) && limit > 0 ? limit : 1
+  const results: R[] = new Array<R>(items.length)
+  let cursor = 0
+
+  const worker = async (): Promise<void> => {
+    while (cursor < items.length) {
+      const index = cursor
+      cursor += 1
+      const item = items[index] as T
+      results[index] = await mapper(item, index)
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(safeLimit, items.length) }, () => worker())
+  await Promise.all(workers)
+  return results
+}
+
 /** Gera um token aleatório seguro para state OAuth. */
 export function generateStateToken(): string {
   const array = new Uint8Array(32)

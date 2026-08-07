@@ -61,3 +61,28 @@ describe('Webhooks.verify', () => {
     expect(() => new Webhooks().verify('{invalido', 1234567890)).toThrow(WebhookError)
   })
 })
+
+describe('Webhooks.verifyForUser', () => {
+  it('deve validar application_id e user_id do vendedor esperado', () => {
+    const parsed = new Webhooks().verifyForUser(notification, 1234567890, notification.user_id)
+    expect(parsed.user_id).toBe(notification.user_id)
+  })
+
+  it('deve aceitar user_id em string', () => {
+    expect(() =>
+      new Webhooks().verifyForUser(notification, 1234567890, String(notification.user_id)),
+    ).not.toThrow()
+  })
+
+  it('deve rejeitar notificação de outro vendedor', () => {
+    expect(() => new Webhooks().verifyForUser(notification, 1234567890, 999)).toThrow(
+      /não pertence ao vendedor/,
+    )
+  })
+
+  it('deve rejeitar application_id de outra aplicação antes de checar o user', () => {
+    expect(() => new Webhooks().verifyForUser(notification, 999, notification.user_id)).toThrow(
+      WebhookError,
+    )
+  })
+})

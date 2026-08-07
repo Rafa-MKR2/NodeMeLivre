@@ -20,6 +20,27 @@ export class Images {
     form.append('file', blob, options.filename ?? 'image.bin')
     return this.transport.post('/pictures/items/upload', form)
   }
+
+  /**
+   * Registra uma imagem a partir de uma URL pública (`POST /pictures`).
+   * O Mercado Livre baixa a imagem no próprio CDN.
+   */
+  async uploadFromUrl(url: string): Promise<ImageUploadResponse> {
+    if (!isHttpUrl(url)) {
+      throw new InputValidationError('URL deve ser http(s) válida para upload por URL')
+    }
+    return this.transport.post('/pictures', { source: url })
+  }
+}
+
+/** Aceita apenas URLs http(s) — evita protocolos locais ou exóticos. */
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:'
+  } catch {
+    return false
+  }
 }
 
 /** Normaliza as diferentes fontes de upload para Blob. */

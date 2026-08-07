@@ -67,4 +67,32 @@ describe('Images', () => {
     expect(err).toBeInstanceOf(InputValidationError)
     expect(transport.calls).toHaveLength(0)
   })
+
+  it('deve registrar imagem por URL via POST /pictures', async () => {
+    const transport = fakeTransport(() => uploaded)
+    const images = new Images(transport)
+
+    const result = await images.uploadFromUrl('https://exemplo.com/foto.jpg')
+
+    expect(result.id).toBe(uploaded.id)
+    const call = transport.calls[0]
+    expect(call).toBeDefined()
+    expect(call?.method).toBe('POST')
+    expect(call?.path).toBe('/pictures')
+    expect(call?.body).toEqual({ source: 'https://exemplo.com/foto.jpg' })
+  })
+
+  it('uploadFromUrl deve rejeitar URL sem protocolo http(s)', async () => {
+    const transport = fakeTransport(() => uploaded)
+    const err = await new Images(transport).uploadFromUrl('file:///etc/passwd').catch((e) => e)
+    expect(err).toBeInstanceOf(InputValidationError)
+    expect(transport.calls).toHaveLength(0)
+  })
+
+  it('uploadFromUrl deve rejeitar URL inválida', async () => {
+    const transport = fakeTransport(() => uploaded)
+    const err = await new Images(transport).uploadFromUrl('não é uma url').catch((e) => e)
+    expect(err).toBeInstanceOf(InputValidationError)
+    expect(transport.calls).toHaveLength(0)
+  })
 })

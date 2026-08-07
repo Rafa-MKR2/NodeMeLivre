@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   deepOmitEmpty,
   generateStateToken,
   isValidStateToken,
+  mapWithConcurrency,
   omitEmpty,
   omitUndefined,
 } from './utils.js'
@@ -62,6 +63,58 @@ describe('deepOmitEmpty', () => {
   it('deve retornar primitivos intactos', () => {
     expect(deepOmitEmpty(0)).toBe(0)
     expect(deepOmitEmpty('x')).toBe('x')
+  })
+})
+
+describe('mapWithConcurrency', () => {
+  it('deve preservar a ordem dos resultados', async () => {
+    const results = await mapWithConcurrency([1, 2, 3, 4, 5], 2, async (n) => n * 2)
+    expect(results).toEqual([2, 4, 6, 8, 10])
+  })
+
+  it('deve respeitar o limite de execuções paralelas', async () => {
+    let inFlight = 0
+    let peak = 0
+    const mapper = vi.fn(async (n: number) => {
+      inFlight += 1
+      peak = Math.max(peak, inFlight)
+      await new Promise((r) => setTimeout(r, 5))
+      inFlight -= 1
+      return n
+    })
+
+    await mapWithConcurrency([1, 2, 3, 4, 5, 6], 3, mapper)
+
+    expect(peak).toBeLessThanOrEqual(3)
+    expect(mapper).toHaveBeenCalledTimes(6)
+  })
+
+  it('deve processar tudo em paralelo quando o limite é maior ou igual ao tamanho', async () => {
+    const mapper = vi.fn(async (n: number) => {
+      await new Promise((r) => setTimeout(r, 5))
+      return n
+    })
+    await mapWithConcurrency([1, 2], 10, mapper)
+    expect(mapper).toHaveBeenCalledTimes(2)
+  })
+
+  it('deve devolver array vazio para entrada vazia', async () => {
+    await expect(mapWithConcurrency([], 3, async (n: number) => n)).resolves.toEqual([])
+  })
+
+  it('deve propagar a primeira rejeição do mapper', async () => {
+    await expect(
+      mapWithConcurrency([1, 2, 3], 2, async (n) => {
+        if (n === 2) throw new Error('boom')
+        return n
+      }),
+    ).rejects.toThrow('boom')
+  })
+
+  it('deve tratar limite inválido como 1', async () => {
+    const mapper = vi.fn(async (n: number) => n)
+    await mapWithConcurrency([1, 2, 3], 0, mapper)
+    expect(mapper).toHaveBeenCalledTimes(3)
   })
 })
 
