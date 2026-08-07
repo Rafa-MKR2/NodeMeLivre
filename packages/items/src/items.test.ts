@@ -71,6 +71,40 @@ describe('Items', () => {
     expect(call?.query).toEqual({ q: 'fone', offset: 20, status: 'active' })
   })
 
+  it('deve buscar itens do vendedor no endpoint proprietário', async () => {
+    const transport = fakeTransport(() => ({
+      results: [item],
+      paging: { total: 1, offset: 0, limit: 10 },
+    }))
+    await new Items(transport).searchBySeller(123, { status: 'active' })
+
+    const call = transport.calls[0]
+    expect(call).toBeDefined()
+    expect(call?.path).toBe('/users/123/items/search')
+    expect(call?.query).toEqual({ status: 'active' })
+  })
+
+  it('deve iterar itens do vendedor com listBySeller()', async () => {
+    const pages: Record<
+      number,
+      { results: unknown[]; paging: { total: number; offset: number; limit: number } }
+    > = {
+      0: { results: [item, { ...item, id: 'MLB2' }], paging: { total: 3, offset: 0, limit: 2 } },
+      2: { results: [{ ...item, id: 'MLB3' }], paging: { total: 3, offset: 2, limit: 2 } },
+    }
+    const transport = fakeTransport((call) => pages[Number(call?.query?.offset)] ?? pages[0])
+
+    const ids: string[] = []
+    for await (const i of new Items(transport).listBySeller(123, { limit: 2 })) {
+      ids.push(i.id)
+    }
+
+    expect(ids).toEqual(['MLB1', 'MLB2', 'MLB3'])
+    expect(transport.calls).toHaveLength(2)
+    expect(transport.calls[0]?.path).toBe('/users/123/items/search')
+    expect(transport.calls[1]?.query).toEqual({ limit: 2, offset: 2 })
+  })
+
   it('deve iterar itens de todas as páginas com list()', async () => {
     const pages: Record<
       number,

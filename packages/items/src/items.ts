@@ -57,7 +57,8 @@ export class Items {
   }
 
   /**
-   * Itera todos os itens de uma busca, página após página, item a item.
+   * Itera todos os itens de uma busca pública, página após página, item a
+   * item.
    *
    * ```ts
    * for await (const item of ml.items.list('MLB', { q: 'fone' })) {
@@ -68,6 +69,42 @@ export class Items {
   list(siteId: string, params: ItemSearchParams = {}): AsyncGenerator<Item, void, void> {
     const fetchPage: PageFetcher<Item> = (offset, limit) =>
       this.transport.get<ItemSearchResponse>(`/sites/${siteId}/search`, {
+        query: toQuery({ ...params, offset, limit }),
+      })
+    return paginate(fetchPage, params.limit === undefined ? {} : { limit: params.limit })
+  }
+
+  /**
+   * Busca os anúncios de um vendedor específico (token proprietário).
+   *
+   * O ML restringiu a busca pública `/sites/{site}/search` para aplicações;
+   * o caminho recomendado para listar os próprios anúncios é
+   * `/users/{seller_id}/items/search` — que só funciona com o token do
+   * próprio vendedor.
+   *
+   * ```ts
+   * const me = await ml.users.me()
+   * const page = await ml.items.searchBySeller(me.id, { status: 'active' })
+   * ```
+   */
+  searchBySeller(sellerId: number, params: ItemSearchParams = {}): Promise<ItemSearchResponse> {
+    return this.transport.get(`/users/${sellerId}/items/search`, { query: toQuery(params) })
+  }
+
+  /**
+   * Itera todos os anúncios de um vendedor, página após página, item a item.
+   * (equivalente a `list()`, mas usando o endpoint do vendedor — recomendado
+   * pós-restrição da busca pública do ML).
+   *
+   * ```ts
+   * for await (const item of ml.items.listBySeller(me.id)) {
+   *   console.log(item.title)
+   * }
+   * ```
+   */
+  listBySeller(sellerId: number, params: ItemSearchParams = {}): AsyncGenerator<Item, void, void> {
+    const fetchPage: PageFetcher<Item> = (offset, limit) =>
+      this.transport.get<ItemSearchResponse>(`/users/${sellerId}/items/search`, {
         query: toQuery({ ...params, offset, limit }),
       })
     return paginate(fetchPage, params.limit === undefined ? {} : { limit: params.limit })
