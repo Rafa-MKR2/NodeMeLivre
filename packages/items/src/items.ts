@@ -75,26 +75,37 @@ export class Items {
   }
 
   /**
-   * Busca os anúncios de um vendedor específico (token proprietário).
+   * Busca os anúncios de um vendedor específico (token proprietário) e
+   * resolve os itens completos.
    *
    * O ML restringiu a busca pública `/sites/{site}/search` para aplicações;
    * o caminho recomendado para listar os próprios anúncios é
    * `/users/{seller_id}/items/search` — que só funciona com o token do
-   * próprio vendedor.
+   * próprio vendedor. Atenção: esse endpoint devolve apenas os **IDs** em
+   * `results`; aqui resolvemos cada ID com `GET /items/{id}` para entregar
+   * itens completos (mesmo contrato de `search`).
    *
    * ```ts
    * const me = await ml.users.me()
    * const page = await ml.items.searchBySeller(me.id, { status: 'active' })
    * ```
    */
-  searchBySeller(sellerId: number, params: ItemSearchParams = {}): Promise<ItemSearchResponse> {
-    return this.transport.get(`/users/${sellerId}/items/search`, { query: toQuery(params) })
+  async searchBySeller(
+    sellerId: number,
+    params: ItemSearchParams = {},
+  ): Promise<ItemSearchResponse> {
+    const page = await this.transport.get<ItemSearchResponse>(`/users/${sellerId}/items/search`, {
+      query: toQuery(params),
+    })
+    const results = await resolveSellerItems(this.transport, page.results)
+    return { ...page, results }
   }
 
   /**
    * Itera todos os anúncios de um vendedor, página após página, item a item.
    * (equivalente a `list()`, mas usando o endpoint do vendedor — recomendado
-   * pós-restrição da busca pública do ML).
+   * pós-restrição da busca pública do ML). Os IDs retornados são resolvidos
+   * para itens completos antes de entregar.
    *
    * ```ts
    * for await (const item of ml.items.listBySeller(me.id)) {
@@ -103,10 +114,16 @@ export class Items {
    * ```
    */
   listBySeller(sellerId: number, params: ItemSearchParams = {}): AsyncGenerator<Item, void, void> {
-    const fetchPage: PageFetcher<Item> = (offset, limit) =>
-      this.transport.get<ItemSearchResponse>(`/users/${sellerId}/items/search`, {
-        query: toQuery({ ...params, offset, limit }),
-      })
+    const fetchPage: PageFetcher<Item> = async (offset, limit) => {
+      const page = await this.transport.get<ItemSearchResponse>(
+        `/users/${sellerId}/items/search`,
+        {
+          query: toQuery({ ...params, offset, limit }),
+        },
+      )
+      const results = await resolveSellerItems(this.transport, page.results)
+      return { ...page, results }
+    }
     return paginate(fetchPage, params.limit === undefined ? {} : { limit: params.limit })
   }
   /** Publica um anúncio (alias de `updateStatus('active')`). */
@@ -131,6 +148,22 @@ export class Items {
     }
     return item
   }
+}
+
+/**
+ * O endpoint `/users/{seller_id}/items/search` devolve apenas os IDs dos
+ * anúncios em `results` (array de strings). Resolve cada ID para o item
+ * completo em paralelo, mantendo o contrato `results: Item[]`.
+ */
+async function resolveSellerItems(
+  transport: ResourceTransport,
+  results: unknown[],
+): Promise<Item[]> {
+  const ids = results
+    .map((entry) => (typeof entry === 'string' ? entry : (entry as Item | null)?.id))
+    .filter((id): id is string => typeof id === 'string' && id !== '')
+  if (ids.length === 0) return []
+  return Promise.all(ids.map((id) => transport.get<Item>(`/items/${id}`)))
 }
 
 /**

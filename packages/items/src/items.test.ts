@@ -71,28 +71,45 @@ describe('Items', () => {
     expect(call?.query).toEqual({ q: 'fone', offset: 20, status: 'active' })
   })
 
-  it('deve buscar itens do vendedor no endpoint proprietário', async () => {
-    const transport = fakeTransport(() => ({
-      results: [item],
-      paging: { total: 1, offset: 0, limit: 10 },
-    }))
-    await new Items(transport).searchBySeller(123, { status: 'active' })
+  it('deve buscar itens do vendedor resolvendo os IDs em itens completos', async () => {
+    const searchPage = { results: ['MLB1', 'MLB2'], paging: { total: 2, offset: 0, limit: 10 } }
+    const transport = fakeTransport((call) => {
+      if (call?.path === '/users/123/items/search') return searchPage
+      const id = call?.path?.split('/').at(-1)
+      return { id, title: `Produto ${id}`, status: 'active' }
+    })
 
-    const call = transport.calls[0]
-    expect(call).toBeDefined()
-    expect(call?.path).toBe('/users/123/items/search')
-    expect(call?.query).toEqual({ status: 'active' })
+    const page = await new Items(transport).searchBySeller(123, { status: 'active' })
+
+    expect(page.results).toEqual([
+      { id: 'MLB1', title: 'Produto MLB1', status: 'active' },
+      { id: 'MLB2', title: 'Produto MLB2', status: 'active' },
+    ])
+    // 1 chamada para a busca + 1 por ID
+    expect(transport.calls[0]?.path).toBe('/users/123/items/search')
+    expect(transport.calls[0]?.query).toEqual({ status: 'active' })
+    expect(transport.calls.map((c) => c?.path)).toEqual([
+      '/users/123/items/search',
+      '/items/MLB1',
+      '/items/MLB2',
+    ])
   })
 
-  it('deve iterar itens do vendedor com listBySeller()', async () => {
+  it('deve iterar itens do vendedor resolvendo IDs com listBySeller()', async () => {
     const pages: Record<
       number,
-      { results: unknown[]; paging: { total: number; offset: number; limit: number } }
+      { results: string[]; paging: { total: number; offset: number; limit: number } }
     > = {
-      0: { results: [item, { ...item, id: 'MLB2' }], paging: { total: 3, offset: 0, limit: 2 } },
-      2: { results: [{ ...item, id: 'MLB3' }], paging: { total: 3, offset: 2, limit: 2 } },
+      0: { results: ['MLB1', 'MLB2'], paging: { total: 3, offset: 0, limit: 2 } },
+      2: { results: ['MLB3'], paging: { total: 3, offset: 2, limit: 2 } },
     }
-    const transport = fakeTransport((call) => pages[Number(call?.query?.offset)] ?? pages[0])
+    const transport = fakeTransport((call) => {
+      if (call?.path?.startsWith('/users/')) {
+        return pages[Number(call?.query?.offset)] ?? pages[0]
+      }
+      const id = call?.path?.split('/').at(-1)
+      return { id, title: `Produto ${id}`, status: 'active' }
+    })
 
     const ids: string[] = []
     for await (const i of new Items(transport).listBySeller(123, { limit: 2 })) {
@@ -100,9 +117,9 @@ describe('Items', () => {
     }
 
     expect(ids).toEqual(['MLB1', 'MLB2', 'MLB3'])
-    expect(transport.calls).toHaveLength(2)
     expect(transport.calls[0]?.path).toBe('/users/123/items/search')
-    expect(transport.calls[1]?.query).toEqual({ limit: 2, offset: 2 })
+    expect(transport.calls[1]?.path).toBe('/items/MLB1')
+    expect(transport.calls[2]?.path).toBe('/items/MLB2')
   })
 
   it('deve iterar itens de todas as páginas com list()', async () => {
