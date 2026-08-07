@@ -90,14 +90,27 @@ for await (const produto of ml.items.list('MLB', { q: 'fone bluetooth' })) {
   console.log(produto.title)
 }
 
+// Cancelamento antecipado: o for await rejeita com AbortError
+const controller = new AbortController()
+const task = (async () => {
+  for await (const item of ml.items.listBySeller(sellerId, {}, controller.signal)) {
+    console.log(item.title)
+  }
+})()
+controller.abort() // cancela a iteração e a requisição em voo
+
 // Webhooks: notificação em tempo real (nova venda, pergunta, mensagem)
 app.post('/webhook', (req, res) => {
-  const notif = ml.webhooks.verify(req.body, process.env.ML_CLIENT_ID!)
+  const notif = ml.webhooks.verifyForUser(req.body, process.env.ML_CLIENT_ID!, sellerId)
+  // valida application_id E o user_id do vendedor conectado — ignora payloads forjados
   if (notif.topic === 'orders_v2') {
     // nova venda chegou
   }
   res.sendStatus(200) // deve responder em < 500ms
 })
+
+// Imagem a partir de URL pública (sem upload de arquivo)
+const foto = await ml.images.uploadFromUrl('https://exemplo.com/camiseta.jpg')
 
 // Chat com comprador
 const msgs = await ml.messages.list(packId, sellerId)
@@ -119,16 +132,16 @@ await writeFile('etiqueta.pdf', Buffer.from(pdf))
 | Recurso | O que faz |
 |---------|-----------|
 | **Auth** | OAuth2 completo — `authorization_code`, `refresh_token`, `credentials`. Refresh automático, dedupe, token store pluggável (memória ou arquivo). |
-| **Items** | CRUD, busca, **paginação automática** (`for await`), **createAndPublish** (cria + garante ativo), `publish`/`pause`. |
-| **Orders** | Busca, detalhes, **waitUntilPaid** (polling com timeout). |
+| **Items** | CRUD, busca, **paginação automática** (`for await` com `AbortSignal`), **createAndPublish** (cria + garante ativo), `publish`/`pause`, `list`/`listBySeller`. |
+| **Orders** | Busca, detalhes, **waitUntilPaid** (polling com timeout e `AbortSignal`). |
 | **Shipments** | Rastreio, **printLabel** (PDF/ZPL → `ArrayBuffer`). |
 | **Questions** | Busca, `answer`, `reply` (responde + marca respondida). |
-| **Images** | `upload(Blob | Buffer | Uint8Array)` → multipart, retorna `id` + variações de tamanho no CDN. |
+| **Images** | `upload(Blob | Buffer | Uint8Array)` → multipart, retorna `id` + variações de tamanho no CDN; `uploadFromUrl(url)` registra por URL pública. |
 | **Messages** | Chat pós-venda: `list`, `get`, `send` (comprador ↔ vendedor). |
-| **Webhooks** | `parse` + `verify(applicationId)` — validação real do ML (não usa HMAC). |
+| **Webhooks** | `parse` + `verify(applicationId)` + `verifyForUser(applicationId, userId)` — validação real do ML (não usa HMAC). |
 | **Erros tipados** | `ApiError` (por status), `RateLimitError`, `NetworkError`, `OAuthError`, `PollingTimeoutError`, `WebhookError`, `InputValidationError`. |
 | **HTTP robusto** | Retry com backoff, timeout, rate-limit automático (`X-Rate-Limit-*`), eventos para observabilidade. |
-| **Resiliência** | `parallel()` e `ResilientTransport` — degradação parcial: o dashboard continua com o que conseguiu carregar. |
+| **Resiliência** | `parallel()` e `ResilientTransport` — degradação parcial: o dashboard continua com o que conseguiu carregar. `mapWithConcurrency` — limite de execuções paralelas preservando a ordem. |
 
 > **Nota de segurança:** o SDK não injeta headers de resposta (CSP, `X-Frame-Options`, etc.) nas requisições — esses headers pertencem ao seu servidor. Use Helmet (ou equivalente) no seu app. Para CSRF no fluxo OAuth, configure um `OAuthStateStore` — o `state` é gerado e armazenado automaticamente na URL de autorização e validado no callback via `ml.consumeState()`.
 

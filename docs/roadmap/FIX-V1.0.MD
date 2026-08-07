@@ -39,6 +39,18 @@ Status dos problemas identificados
 | 8 | Hardening HTTP | Implementado — `securityHeaders` padrão `false` + nota de segurança no README |
 | 9 | UX | Implementado — chat sem destinatário não permite envio (com aviso), ações com loading/estados claros |
 
+### Refinamentos de robustez adicionados na série (dogfooding do painel)
+
+Além dos problemas acima, o dogfooding contínuo do painel administrativo gerou refinamentos de robustez que foram implementados na série:
+
+| # | Refinamento | Status |
+| --- | --- | --- |
+| A | **Cancelamento antecipado** — `paginate()`/`Items.list`/`listBySeller` aceitam `AbortSignal` (3º parâmetro opcional, compatível); o `for await` rejeita com `AbortError` sem buscar a página seguinte | Implementado — export SSE do painel usa `AbortController` e cancela a requisição em voo no disconnect do cliente |
+| B | **Concorrência limitada** — `mapWithConcurrency(mapper, limit)` no `@nodemelivre/core` aplica mapper com cap de execuções paralelas preservando a ordem | Implementado — resolução de itens do vendedor usa cap 10 (`ITEM_RESOLUTION_CONCURRENCY`), com teste de 25 IDs e falha-rápida |
+| C | **Upload por URL** — `Images.uploadFromUrl(url)` faz `POST /pictures` validando protocolo http(s) | Implementado — rota `/api/images/from-url` do painel migrou do Nível 1 (`ml.http`) para o resource tipado |
+| D | **Webhook por vendedor** — `Webhooks.verifyForUser(payload, appId, userId)` valida `application_id` E `user_id` | Implementado — painel ignora notificações de outro vendedor com `200 { ok, ignored }` (evita retry do ML sem processar) |
+| E | **Cobertura de rotas HTTP** — testes de integração reais (servidor + `fetch`) com o SDK mockado | Implementado — 10 testes: webhook (200/ignored/503), `/from-url` (201/400/401), export SSE (stream/done/abort/401) |
+
 Objetivos da série v1.0.x
 Estabilidade
 

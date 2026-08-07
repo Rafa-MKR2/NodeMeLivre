@@ -52,3 +52,12 @@ Tipos novos em `@nodemelivre/types`: `WebhookNotification`/`WebhookTopic`/`Webho
 ### Quando revisitar
 
 Quando attachments forem necessários (ex.: fotos no chat), adicionar `Messages.uploadAttachment`. Se o ML passar a assinar notificações, `verify` ganha um modo HMAC opcional sem quebrar a API atual.
+
+#### `Webhooks.verifyForUser(payload, applicationId, expectedUserId)` (v1.0.x)
+
+No hardening da v1.0.x, o resource ganhou `verifyForUser` — a autenticação "de verdade" para o cenário de um único vendedor (ex.: painel administrativo):
+
+- Chama `verify(payload, applicationId)` e **confere o `user_id` da notificação contra o vendedor esperado** (`expectedUserId`).
+- Lança `WebhookError` se o `application_id` não bater **ou** se a notificação vier de outro `user_id`.
+- **Motivação:** o painel roda para um vendedor específico; uma notificação forjada com `application_id` correto mas `user_id` de outra conta (ou notificação vazada de outro app) não deve disparar processamento. Como o ML não usa HMAC, essa é a verificação prática — o callback responde `200` com `ignored: true` para notificações de outro vendedor, evitando retries do ML sem processar o evento.
+- Segue puro (sem HTTP), como `verify`/`parse`, e é trivial de testar.

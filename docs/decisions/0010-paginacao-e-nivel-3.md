@@ -26,6 +26,16 @@ Novo helper genérico que recebe um **fetcher de página** (`(offset, limit) => 
 - **Alternativa B:** retornar todas as páginas num array — perde streaming/memória baixa para catálogos grandes.
 - **Escolhida:** helper no core, porque centraliza a lógica de paginação num lugar testado e reutilizável, mantendo `search()` intacto (compatibilidade).
 
+#### `paginate()` na API pública + `AbortSignal` (v1.0.x)
+
+No hardening da v1.0.x, `paginate` passou a ser exportado na API pública do `@nodemelivre/core` (e reexportado pelo `@nodemelivre/sdk`) — fechando a pendência anotada em "Quando revisitar".
+
+`paginate(fetchPage, { signal? })` agora aceita um **`AbortSignal` opcional** (3º parâmetro em `Items.list`/`listBySeller` também):
+
+- `throwIfAborted` no início de cada `next()` e entre os itens de uma página → o `for await` **rejeita com `AbortError`** quando o signal dispara (antes da 1ª chamada, entre páginas ou no meio de uma página), sem buscar a requisição seguinte.
+- Sem signal (padrão) o comportamento é idêntico ao anterior — **compatível com versões anteriores**.
+- Padrão usado no painel para **cancelar a exportação SSE em voo** quando o cliente desconecta (`AbortController` + `req.on('close')`), evitando requisições inúteis ao ML após o disconnect.
+
 ### Operações nível 3 — aliases de negócio
 
 - `Items.publish(id)` / `Items.pause(id)` — aliases tipados de `updateStatus` (`active`/`paused`), sem fluxo composto nesta entrega.
@@ -43,4 +53,4 @@ Novo helper genérico que recebe um **fetcher de página** (`(offset, limit) => 
 
 ### Quando revisitar
 
-Se paginação aparecer em muitos resources, considerar expor `paginate` na API pública do `@nodemelivre/sdk`. Se `waitUntilPaid` precisar de backoff progressivo, adicionar opção de `strategy` (fixo/exponecial).
+Se paginação aparecer em muitos resources, considerar expor `paginate` na API pública do `@nodemelivre/sdk` *(feito na v1.0.x — ver acima)*. Se `waitUntilPaid` precisar de backoff progressivo, adicionar opção de `strategy` (fixo/exponecial). Se o cancelamento por `AbortSignal` precisar evitar o `AbortError` em favor de parada silenciosa, adicionar opção de política (ex.: `onAbort: 'throw' | 'stop'`).

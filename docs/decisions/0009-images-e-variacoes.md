@@ -51,3 +51,13 @@ O `Items.create`/`update` já repassam o body integral, então as variações fl
 - (+) Novo pacote `@nodemelivre/images` isolado, publicado de forma independente (ADR-0005).
 - (-) `FormData` exige Node 18.17+ (já é o engine mínimo do monorepo) — sem problema.
 - (-) Upload só cobre o endpoint `items/upload` (imagem para anúncio); outros endpoints de imagem (múltiplos por request, edição) ficam para evolução posterior.
+
+#### `Images.uploadFromUrl(url)` — upload por URL pública (v1.0.x)
+
+No hardening da v1.0.x, o resource ganhou `uploadFromUrl(url)`:
+
+- Faz `POST /pictures` com `{ source: url }` — registra no CDN do ML uma imagem já hospedada em URL pública (o endpoint `items/upload` exige multipart de arquivo).
+- **Valida o protocolo `http(s)`** do argumento e lança `InputValidationError` para qualquer outro esquema (`file:`, `data:`, `ftp:`...) — evita payloads sem sentido indo à API e, no painel, mapeia para 400 antes de qualquer chamada.
+- Retorna o mesmo `ImageUploadResponse` (`id` + `variations`) do `upload`, então o fluxo do anúncio é idêntico: `pictures: [{ source: foto.id }]` ou `picture_ids`.
+
+**Motivação:** o painel usava o Nível 1 do SDK (`ml.http.post('/pictures', ...)`) para esse caso; expor no resource dá tipagem, validação e reuso do transporte único (auth/retry/rate-limit) sem sair da API pública.
