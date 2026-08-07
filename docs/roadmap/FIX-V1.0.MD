@@ -30,7 +30,7 @@ Status dos problemas identificados
 | # | Problema | Status |
 | --- | --- | --- |
 | 1 | Estados presos na interface (SSE) | Implementado — export do painel reseta o estado em `finally` (timeout, erro, abort ou fim do stream) |
-| 2 | Dashboard pouco resiliente | Implementado — resiliência no SDK + degradação parcial no painel: stats ficam `null` quando a fonte falha (ex.: 429) e a UI mostra "indisponível" em vez de 0 enganoso |
+| 2 | Dashboard pouco resiliente | Implementado — resiliência no SDK (`parallel`/`ResilientTransport`, retry pós-401 sem consumir orçamento, tracking de rate-limit por recurso) **e** degradação parcial no painel: o dashboard usa `Promise.allSettled` e cada stat (items/orders/perguntas) vira `null` quando a fonte falha (ex.: 429/scope) — a UI mostra "indisponível" em vez de um 0 enganoso ou de um 500. |
 | 3 | Crescimento infinito de estados OAuth | Implementado — `OAuthStateStore` (TTL, limite, limpeza automática) integrado ao `OAuthClient` (CSRF) |
 | 4 | Corridas de concorrência (logs) | Implementado — `DeduplicatingLogger` imutável + `RateLimiter` single-flight |
 | 5 | Tratamento de configuração | Implementado — `ConfigurationError` com mensagens claras (SDK e OAuthClient) |
@@ -50,6 +50,8 @@ Além dos problemas acima, o dogfooding contínuo do painel administrativo gerou
 | C | **Upload por URL** — `Images.uploadFromUrl(url)` faz `POST /pictures` validando protocolo http(s) | Implementado — rota `/api/images/from-url` do painel migrou do Nível 1 (`ml.http`) para o resource tipado |
 | D | **Webhook por vendedor** — `Webhooks.verifyForUser(payload, appId, userId)` valida `application_id` E `user_id` | Implementado — painel ignora notificações de outro vendedor com `200 { ok, ignored }` (evita retry do ML sem processar) |
 | E | **Cobertura de rotas HTTP** — testes de integração reais (servidor + `fetch`) com o SDK mockado | Implementado — 10 testes: webhook (200/ignored/503), `/from-url` (201/400/401), export SSE (stream/done/abort/401) |
+| F | **`Orders.list()`** — paginação assíncrona (`for await`) + `AbortSignal` no resource `orders` | Implementado — reusa `paginate()` do core; testes de páginas/limit/signal/abort |
+| G | **`Questions.list()`** — idem no resource `questions` (normaliza resposta `questions`→`results`) | Implementado — `QuestionSearchParams` ganhou `offset`/`limit`; testes de páginas/limit/signal/abort |
 
 Objetivos da série v1.0.x
 Estabilidade
@@ -166,7 +168,7 @@ Objetivo
 
 Trabalhar com degradação parcial.
 
-> **Status: Parcial.** O lado SDK da resiliência foi implementado: retentativa pós-401 com refresh automático sem consumir o orçamento de retry, re-lançamento do erro real da API, tracking de rate-limit por recurso (`método:recurso`) e parsing robusto de `X-Rate-Limit-Reset`. A degradação parcial no dashboard do painel (ex.: "Perguntas indisponíveis" em vez de 500) segue pendente.
+> **Status: Implementado.** Lado SDK: retentativa pós-401 com refresh automático sem consumir o orçamento de retry, re-lançamento do erro real da API, tracking de rate-limit por recurso (`método:recurso`), parsing robusto de `X-Rate-Limit-Reset` e `parallel`/`ResilientTransport`. Lado painel: o dashboard usa `Promise.allSettled` e expõe `stats` com `null` quando uma fonte falha (ex.: "Perguntas indisponíveis") em vez de derrubar a rota com 500 (`apps/api/src/routes/dashboard.ts`).
 
 3. Crescimento infinito de estados OAuth
 Problema

@@ -50,4 +50,72 @@ describe('Questions', () => {
       body: { question_id: 5, text: 'Sim, tem garantia' },
     })
   })
+
+  it('deve iterar todas as perguntas de uma busca paginada (resposta com `questions`)', async () => {
+    const pages = [
+      { questions: [{ ...question, id: 1 }], total: 3 },
+      { questions: [{ ...question, id: 2 }, { ...question, id: 3 }], total: 3 },
+    ]
+    const transport = fakeTransport(
+      () => pages.shift() ?? { questions: [], total: 3 },
+    )
+
+    const ids: number[] = []
+    for await (const item of new Questions(transport).list({ seller_id: 42 })) {
+      ids.push(item.id)
+    }
+
+    expect(ids).toEqual([1, 2, 3])
+    expect(transport.calls).toHaveLength(2)
+    expect(transport.calls[0]?.query).toMatchObject({ seller_id: 42, offset: 0, limit: 50 })
+    expect(transport.calls[1]?.query).toMatchObject({ seller_id: 42, offset: 1, limit: 50 })
+  })
+
+  it('deve respeitar o limit informado pelo consumidor', async () => {
+    const transport = fakeTransport(() => ({
+      questions: [{ ...question, id: 1 }],
+      total: 1,
+    }))
+
+    const ids: number[] = []
+    for await (const item of new Questions(transport).list({ limit: 5 })) {
+      ids.push(item.id)
+    }
+
+    expect(ids).toEqual([1])
+    expect(transport.calls[0]?.query).toMatchObject({ offset: 0, limit: 5 })
+  })
+
+  it('deve repassar o AbortSignal para a requisição em voo', async () => {
+    const transport = fakeTransport(() => ({ questions: [{ ...question, id: 1 }], total: 1 }))
+    const controller = new AbortController()
+
+    const ids: number[] = []
+    for await (const item of new Questions(transport).list({}, controller.signal)) {
+      ids.push(item.id)
+    }
+
+    expect(ids).toEqual([1])
+    expect(transport.calls[0]?.signal).toBe(controller.signal)
+  })
+
+  it('deve abortar entre as páginas quando o signal dispara', async () => {
+    const transport = fakeTransport(() => ({
+      questions: [{ ...question, id: 1 }],
+      total: 100,
+    }))
+    const controller = new AbortController()
+
+    const ids: number[] = []
+    const iterate = async (): Promise<void> => {
+      for await (const item of new Questions(transport).list({}, controller.signal)) {
+        ids.push(item.id)
+        controller.abort()
+      }
+    }
+
+    await expect(iterate()).rejects.toThrow(/aborted/i)
+    expect(ids).toEqual([1])
+    expect(transport.calls).toHaveLength(1)
+  })
 })

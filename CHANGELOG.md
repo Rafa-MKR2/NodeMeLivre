@@ -12,6 +12,7 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 - `Items.list`/`listBySeller` e `paginate()` aceitam `AbortSignal`: cancelamento antecipado da iteração e da requisição em voo (o `for await` rejeita com AbortError).
 - `Images.uploadFromUrl(url)` em `@nodemelivre/images`: registra imagem a partir de uma URL pública (`POST /pictures`), validando protocolo http(s) — sem depender do Nível 1 do SDK.
 - `Webhooks.verifyForUser(payload, applicationId, expectedUserId)` em `@nodemelivre/webhooks`: valida `application_id` e o `user_id` da notificação contra o vendedor esperado — controle real contra payloads forjados (o ML não usa HMAC).
+- `Orders.list(params, signal)` em `@nodemelivre/orders` e `Questions.list(params, signal)` em `@nodemelivre/questions`: paginação assíncrona (`for await`) reutilizando `paginate()` do core, com `AbortSignal` opcional — o `for await` rejeita com AbortError sem buscar a página seguinte. `QuestionSearchParams` ganhou `offset`/`limit`; `Questions.list` normaliza a resposta (`questions` → `results`).
 
 ### Corrigido
 

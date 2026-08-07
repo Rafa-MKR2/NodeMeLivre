@@ -35,6 +35,7 @@ No hardening da v1.0.x, `paginate` passou a ser exportado na API pública do `@n
 - `throwIfAborted` no início de cada `next()` e entre os itens de uma página → o `for await` **rejeita com `AbortError`** quando o signal dispara (antes da 1ª chamada, entre páginas ou no meio de uma página), sem buscar a requisição seguinte.
 - Sem signal (padrão) o comportamento é idêntico ao anterior — **compatível com versões anteriores**.
 - Padrão usado no painel para **cancelar a exportação SSE em voo** quando o cliente desconecta (`AbortController` + `req.on('close')`), evitando requisições inúteis ao ML após o disconnect.
+- No mesmo ciclo, `Orders.list()` e `Questions.list()` passaram a expor o mesmo padrão (`for await` + `AbortSignal`), reutilizando `paginate()` — a paginação deixou de ser exclusividade de `items`. `Questions.list` normaliza a resposta de `/questions/search` (`questions` → `results`), e `QuestionSearchParams` ganhou `offset`/`limit`.
 
 ### Operações nível 3 — aliases de negócio
 
@@ -53,4 +54,4 @@ No hardening da v1.0.x, `paginate` passou a ser exportado na API pública do `@n
 
 ### Quando revisitar
 
-Se paginação aparecer em muitos resources, considerar expor `paginate` na API pública do `@nodemelivre/sdk` *(feito na v1.0.x — ver acima)*. Se `waitUntilPaid` precisar de backoff progressivo, adicionar opção de `strategy` (fixo/exponecial). Se o cancelamento por `AbortSignal` precisar evitar o `AbortError` em favor de parada silenciosa, adicionar opção de política (ex.: `onAbort: 'throw' | 'stop'`).
+A paginação foi estendida a `orders` e `questions` na v1.0.x *(ver acima)*; se novos resources com busca paginada surgirem (ex.: `messages`), aplicar o mesmo padrão. Se `waitUntilPaid` precisar de backoff progressivo, adicionar opção de `strategy` (fixo/exponecial). Se o cancelamento por `AbortSignal` precisar evitar o `AbortError` em favor de parada silenciosa, adicionar opção de política (ex.: `onAbort: 'throw' | 'stop'`).

@@ -1,4 +1,4 @@
-import { type ResourceTransport, toQuery } from '@nodemelivre/core'
+import { type PageFetcher, paginate, type ResourceTransport, toQuery } from '@nodemelivre/core'
 import { PollingTimeoutError } from '@nodemelivre/errors'
 import type { Order, OrderItem, OrderSearchParams, OrderSearchResponse } from '@nodemelivre/types'
 
@@ -14,6 +14,30 @@ export class Orders {
   /** Busca de vendas por vendedor, comprador, status, etc. */
   search(params: OrderSearchParams = {}): Promise<OrderSearchResponse> {
     return this.transport.get('/orders/search', { query: toQuery(params) })
+  }
+
+  /**
+   * Itera todas as vendas de uma busca, página após página, pedido a pedido.
+   *
+   * ```ts
+   * for await (const order of ml.orders.list({ seller: me.id })) {
+   *   console.log(order.id, order.status)
+   * }
+   * ```
+   *
+   * Aceita um `AbortSignal` opcional: o `for await` rejeita com AbortError
+   * quando o signal dispara, sem buscar a página seguinte.
+   */
+  list(
+    params: OrderSearchParams = {},
+    signal?: AbortSignal,
+  ): AsyncGenerator<Order, void, void> {
+    const fetchPage: PageFetcher<Order> = (offset, limit, pageSignal) =>
+      this.transport.get<OrderSearchResponse>('/orders/search', {
+        query: toQuery({ ...params, offset, limit }),
+        ...(pageSignal !== undefined ? { signal: pageSignal } : {}),
+      })
+    return paginate(fetchPage, paginationOptions(params, signal))
   }
 
   /** Itens de uma venda. */
@@ -82,4 +106,15 @@ function abortError(reason: unknown): Error {
   error.name = 'AbortError'
   if (reason !== undefined) error.cause = reason
   return error
+}
+
+/** Monta as opções do `paginate()` sem passar `undefined` explícito. */
+function paginationOptions(
+  params: OrderSearchParams,
+  signal: AbortSignal | undefined,
+): { limit?: number; signal?: AbortSignal } {
+  const options: { limit?: number; signal?: AbortSignal } = {}
+  if (params.limit !== undefined) options.limit = params.limit
+  if (signal !== undefined) options.signal = signal
+  return options
 }

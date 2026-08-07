@@ -95,4 +95,73 @@ describe('Orders', () => {
       vi.useRealTimers()
     }
   })
+
+  it('deve iterar todas as vendas de uma busca paginada', async () => {
+    const pages = [
+      { results: [{ ...order, id: 1 }], paging: { total: 3, offset: 0, limit: 2 } },
+      { results: [{ ...order, id: 2 }, { ...order, id: 3 }], paging: { total: 3, offset: 2, limit: 2 } },
+    ]
+    const transport = fakeTransport(() => pages.shift() ?? { results: [], paging: { total: 3, offset: 2, limit: 2 } })
+
+    const ids: number[] = []
+    for await (const item of new Orders(transport).list({ seller: 42 }, undefined)) {
+      ids.push(item.id)
+    }
+
+    expect(ids).toEqual([1, 2, 3])
+    expect(transport.calls).toHaveLength(2)
+    expect(transport.calls[0]?.query).toMatchObject({ seller: 42, offset: 0, limit: 50 })
+    expect(transport.calls[1]?.query).toMatchObject({ seller: 42, offset: 1, limit: 50 })
+  })
+
+  it('deve respeitar o limit informado pelo consumidor', async () => {
+    const transport = fakeTransport(() => ({
+      results: [{ ...order, id: 1 }],
+      paging: { total: 1, offset: 0, limit: 10 },
+    }))
+
+    const ids: number[] = []
+    for await (const item of new Orders(transport).list({ limit: 10 })) {
+      ids.push(item.id)
+    }
+
+    expect(ids).toEqual([1])
+    expect(transport.calls[0]?.query).toMatchObject({ offset: 0, limit: 10 })
+  })
+
+  it('deve repassar o AbortSignal para a requisição em voo', async () => {
+    const transport = fakeTransport(() => ({
+      results: [{ ...order, id: 1 }],
+      paging: { total: 1, offset: 0, limit: 10 },
+    }))
+    const controller = new AbortController()
+
+    const items: number[] = []
+    for await (const item of new Orders(transport).list({}, controller.signal)) {
+      items.push(item.id)
+    }
+
+    expect(items).toEqual([1])
+    expect(transport.calls[0]?.signal).toBe(controller.signal)
+  })
+
+  it('deve abortar entre as páginas quando o signal dispara', async () => {
+    const transport = fakeTransport(() => ({
+      results: [{ ...order, id: 1 }],
+      paging: { total: 100, offset: 0, limit: 1 },
+    }))
+    const controller = new AbortController()
+
+    const items: number[] = []
+    const iterate = async (): Promise<void> => {
+      for await (const item of new Orders(transport).list({}, controller.signal)) {
+        items.push(item.id)
+        controller.abort()
+      }
+    }
+
+    await expect(iterate()).rejects.toThrow(/aborted/i)
+    expect(items).toEqual([1])
+    expect(transport.calls).toHaveLength(1)
+  })
 })
