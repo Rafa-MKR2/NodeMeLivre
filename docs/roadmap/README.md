@@ -120,7 +120,7 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 |---|---|
 | API pública consolidada (SDK facade com todos os 12 resources) | ✔ |
 | Docs completas (ADRs 0001–0012, exemplos, roadmap, CHANGELOG) | ✔ |
-| 110 testes (Vitest) passando | ✔ |
+| 171 testes (Vitest) passando | ✔ |
 | CI verde (lint, typecheck, teste, build) | ✔ |
 
 ---

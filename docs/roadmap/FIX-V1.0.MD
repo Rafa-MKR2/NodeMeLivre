@@ -29,15 +29,15 @@ Status dos problemas identificados
 
 | # | Problema | Status |
 | --- | --- | --- |
-| 1 | Estados presos na interface (SSE) | Pendente (aplicação de exemplo) |
-| 2 | Dashboard pouco resiliente | Parcial — resiliência do SDK implementada; degradação parcial no painel pendente |
+| 1 | Estados presos na interface (SSE) | Implementado — export do painel reseta o estado em `finally` (timeout, erro, abort ou fim do stream) |
+| 2 | Dashboard pouco resiliente | Implementado — resiliência no SDK + degradação parcial no painel: stats ficam `null` quando a fonte falha (ex.: 429) e a UI mostra "indisponível" em vez de 0 enganoso |
 | 3 | Crescimento infinito de estados OAuth | Implementado — `OAuthStateStore` (TTL, limite, limpeza automática) integrado ao `OAuthClient` (CSRF) |
 | 4 | Corridas de concorrência (logs) | Implementado — `DeduplicatingLogger` imutável + `RateLimiter` single-flight |
 | 5 | Tratamento de configuração | Implementado — `ConfigurationError` com mensagens claras (SDK e OAuthClient) |
-| 6 | Objetos parcialmente válidos | Implementado — `deepOmitEmpty` envia somente propriedades válidas |
+| 6 | Objetos parcialmente válidos | Implementado — `deepOmitEmpty` envia somente propriedades válidas (crash com `null` corrigido + testes) |
 | 7 | Logs redundantes | Implementado — `DeduplicatingLogger` centraliza e deduplica |
 | 8 | Hardening HTTP | Implementado — `securityHeaders` padrão `false` + nota de segurança no README |
-| 9 | UX | Pendente (aplicação de exemplo) |
+| 9 | UX | Implementado — chat sem destinatário não permite envio (com aviso), ações com loading/estados claros |
 
 Objetivos da série v1.0.x
 Estabilidade

@@ -13,6 +13,10 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 - `DeduplicatingLogger`: a entry no cache é sempre substituída por uma referência nova (imutável) — nunca mutada no lugar — eliminando corridas de concorrência sobre o objeto compartilhado. O resumo emite a mensagem original (antes era reconstruída do key via `split(':')`, quebrando mensagens com dois-pontos).
 - `RateLimiter`: espera single-flight — requisições concorrentes no mesmo recurso esgotado compartilham uma única espera até o reset (evita "thundering herd" no reset) e o estado esgotado é limpo ao fim da janela.
 - `deepOmitEmpty`: preserva `null` intencional — enviar `null` em `PUT /items` continua limpando o campo (antes era removido do payload).
+- `deepOmitEmpty`: **crash com `null` corrigido** (`Object.keys(null)` em qualquer `null` aninhado) — bug encontrado pelo dogfooding, coberto por testes novos.
+- **Build publicável quebrado (crítico):** os `tsconfig.build.json` herdavam os `paths` dos packages irmãos e geravam `dist` aninhado — o entrypoint `dist/index.js`/`dist/index.d.ts` ficava congelado/ausente. `@nodemelivre/images`, `@nodemelivre/messages` e `@nodemelivre/webhooks` nem tinham entrypoint; os demais expunham código sem nível 3/hardening. Todos os 14 packages agora buildam com `rootDir: "src"` e `paths: {}`, validado por smoke test de import do `dist`.
+- **Runtime quebrado no entry do `@nodemelivre/core`:** re-exportava os `test-utils` (que importam `vitest`), carregando o vitest em produção. Removido do entry; seguem no subpath `@nodemelivre/core/test-utils`.
+- **Dependências não declaradas:** `@nodemelivre/core`, `@nodemelivre/images` e `@nodemelivre/messages` importavam `@nodemelivre/errors` sem declará-lo. Declaradas (consumidores de packages individuais quebravam em runtime).
 
 ### Alterado
 
@@ -27,6 +31,10 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 - Validações: `Messages.send` rejeita texto acima de 350 caracteres; `Images.upload` rejeita arquivo vazio.
 - `Orders.waitUntilPaid` aceita `AbortSignal` para cancelamento antecipado do polling.
 - Testes para `resilience` (`parallel`/`ResilientTransport`), `OAuthStateStore` e `DeduplicatingLogger` — 147 testes no total.
+- `utils.test.ts` no `@nodemelivre/core` (regressão do crash de `null`, comportamento documentado de preservar `null`, tokens OAuth) — 171 testes no total.
+- **Validação de entrada em `@nodemelivre/items`** (`create`/`update`/`createAndPublish`): falha rápida com `InputValidationError` para `title` vazio, `price` não positivo e `available_quantity` não inteiro — mesmo padrão de `messages`/`images` (auditoria de consistência). `create`/`update` agora são `async` (validação rejeita como promise). — 175 testes no total.
+- `BuyingMode` (`'buy_it_now' | 'classified'`) em `@nodemelivre/types`; `ItemInput.buying_mode` e `Item.buying_mode` tipados.
+- `tsconfig.examples.json` + scripts `typecheck:examples`/`typecheck:all`: exemplos verificados no CI (antes ficavam fora e driftavam).
 
 ## [1.0.0] - 2026-08-05
 
