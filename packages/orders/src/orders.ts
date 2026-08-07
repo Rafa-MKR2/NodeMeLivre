@@ -28,10 +28,7 @@ export class Orders {
    * Aceita um `AbortSignal` opcional: o `for await` rejeita com AbortError
    * quando o signal dispara, sem buscar a página seguinte.
    */
-  list(
-    params: OrderSearchParams = {},
-    signal?: AbortSignal,
-  ): AsyncGenerator<Order, void, void> {
+  list(params: OrderSearchParams = {}, signal?: AbortSignal): AsyncGenerator<Order, void, void> {
     const fetchPage: PageFetcher<Order> = (offset, limit, pageSignal) =>
       this.transport.get<OrderSearchResponse>('/orders/search', {
         query: toQuery({ ...params, offset, limit }),

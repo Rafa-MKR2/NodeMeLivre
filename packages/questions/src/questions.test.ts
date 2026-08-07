@@ -54,11 +54,15 @@ describe('Questions', () => {
   it('deve iterar todas as perguntas de uma busca paginada (resposta com `questions`)', async () => {
     const pages = [
       { questions: [{ ...question, id: 1 }], total: 3 },
-      { questions: [{ ...question, id: 2 }, { ...question, id: 3 }], total: 3 },
+      {
+        questions: [
+          { ...question, id: 2 },
+          { ...question, id: 3 },
+        ],
+        total: 3,
+      },
     ]
-    const transport = fakeTransport(
-      () => pages.shift() ?? { questions: [], total: 3 },
-    )
+    const transport = fakeTransport(() => pages.shift() ?? { questions: [], total: 3 })
 
     const ids: number[] = []
     for await (const item of new Questions(transport).list({ seller_id: 42 })) {

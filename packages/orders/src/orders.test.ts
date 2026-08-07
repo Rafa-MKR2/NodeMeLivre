@@ -99,9 +99,17 @@ describe('Orders', () => {
   it('deve iterar todas as vendas de uma busca paginada', async () => {
     const pages = [
       { results: [{ ...order, id: 1 }], paging: { total: 3, offset: 0, limit: 2 } },
-      { results: [{ ...order, id: 2 }, { ...order, id: 3 }], paging: { total: 3, offset: 2, limit: 2 } },
+      {
+        results: [
+          { ...order, id: 2 },
+          { ...order, id: 3 },
+        ],
+        paging: { total: 3, offset: 2, limit: 2 },
+      },
     ]
-    const transport = fakeTransport(() => pages.shift() ?? { results: [], paging: { total: 3, offset: 2, limit: 2 } })
+    const transport = fakeTransport(
+      () => pages.shift() ?? { results: [], paging: { total: 3, offset: 2, limit: 2 } },
+    )
 
     const ids: number[] = []
     for await (const item of new Orders(transport).list({ seller: 42 }, undefined)) {
