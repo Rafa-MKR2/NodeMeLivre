@@ -51,7 +51,12 @@ describe('deepOmitEmpty', () => {
   })
 
   it('deve preservar arrays vazios e valores falsy', () => {
-    expect(deepOmitEmpty({ a: [], b: 0, c: false, d: '' })).toEqual({ a: [], b: 0, c: false, d: '' })
+    expect(deepOmitEmpty({ a: [], b: 0, c: false, d: '' })).toEqual({
+      a: [],
+      b: 0,
+      c: false,
+      d: '',
+    })
   })
 
   it('deve retornar primitivos intactos', () => {

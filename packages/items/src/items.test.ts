@@ -152,9 +152,9 @@ describe('Items — validação de entrada', () => {
     await expect(items.create({ title: 'x', price: 0, available_quantity: 5 })).rejects.toThrow(
       'price deve ser um número positivo',
     )
-    await expect(
-      items.create({ title: 'x', price: -1, available_quantity: 5 }),
-    ).rejects.toThrow('price')
+    await expect(items.create({ title: 'x', price: -1, available_quantity: 5 })).rejects.toThrow(
+      'price',
+    )
   })
 
   it('update rejeita estoque não inteiro ou negativo', async () => {
@@ -170,6 +170,10 @@ describe('Items — validação de entrada', () => {
   it('update aceita campos parciais válidos', async () => {
     const transport = fakeTransport(() => item)
     await new Items(transport).update('MLB1', { price: 20 })
-    expect(transport.calls[0]).toMatchObject({ method: 'PUT', path: '/items/MLB1', body: { price: 20 } })
+    expect(transport.calls[0]).toMatchObject({
+      method: 'PUT',
+      path: '/items/MLB1',
+      body: { price: 20 },
+    })
   })
 })
