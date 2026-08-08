@@ -8,6 +8,7 @@
 | [roadmap/](roadmap/README.md) | Roadmap, prioridades e Definition of Done |
 | [releases/](releases/README.md) | Processo de release e CHANGELOG |
 | [github-packages.md](github-packages.md) | Publicação e instalação via GitHub Packages |
+| [auditoria-seguranca.md](auditoria-seguranca.md) | Auditoria de segurança (path traversal, SSRF, redirects) e correções |
 
 ## Regra de ouro
 
