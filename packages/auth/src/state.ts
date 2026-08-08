@@ -119,6 +119,21 @@ export class OAuthStateStore {
     return this.store.delete(state)
   }
 
+  /**
+   * Atualiza os metadados de um state existente (ex.: armazenar code_verifier PKCE).
+   * Retorna false se o state não existir ou estiver expirado.
+   */
+  updateMetadata(state: string, metadata: Record<string, unknown>): boolean {
+    const entry = this.store.get(state)
+    if (!entry) return false
+    if (this.isExpired(entry)) {
+      this.store.delete(state)
+      return false
+    }
+    entry.metadata = { ...entry.metadata, ...metadata }
+    return true
+  }
+
   /** Limpa todos os estados expirados. Retorna quantidade removida. */
   cleanup(): number {
     const now = this.clock()

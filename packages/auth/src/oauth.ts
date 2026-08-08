@@ -6,7 +6,7 @@ import type { AccessToken } from './token.js'
 
 const TOKEN_PATH = '/oauth/token'
 const DEFAULT_SITE_ID = 'MLB'
-const PKCE_TTL_MS = 10 * 60 * 1000 // mesma janela dos states
+const PKCE_TTL_MS = 10 * 60 * 1000 // mesma janela dos states (fallback in-memory)
 
 /** Domínios de autorização por site. Brasil usa mercadolivre, os demais mercadolibre. */
 const AUTH_DOMAINS: Record<string, string> = {
@@ -44,6 +44,7 @@ export interface OAuthOptions {
    * Store de estados OAuth para proteção CSRF. Quando configurado,
    * `authorizationUrl` gera/armazena o `state` automaticamente e
    * `consumeState` valida o state recebido no callback.
+   * Também armazena o `code_verifier` PKCE no metadata do state.
    */
   stateStore?: OAuthStateStore
   /**
@@ -86,11 +87,6 @@ interface OAuthTokenResponse {
   refresh_token?: string
 }
 
-interface StoredCodeVerifier {
-  verifier: string
-  createdAt: number
-}
-
 /**
  * Cliente OAuth2 do Mercado Livre.
  *
@@ -106,8 +102,9 @@ export class OAuthClient {
   private readonly httpClient: HttpClient
   private readonly pkceEnabled: boolean
   private readonly pkceMethod: PkceMethod
-  private readonly codeVerifiers = new Map<string, StoredCodeVerifier>()
   readonly stateStore: OAuthStateStore | undefined
+  /** Fallback in-memory para code_verifier quando não há stateStore (compatibilidade). */
+  private readonly codeVerifiers = new Map<string, { verifier: string; createdAt: number }>()
 
   constructor(options: OAuthOptions) {
     if (!options.clientId || !options.clientSecret) {
@@ -143,7 +140,14 @@ export class OAuthClient {
       url.searchParams.set('code_challenge', generateCodeChallenge(verifier, this.pkceMethod))
       url.searchParams.set('code_challenge_method', this.pkceMethod)
       if (state !== undefined) {
-        this.codeVerifiers.set(state, { verifier, createdAt: Date.now() })
+        if (this.stateStore !== undefined) {
+          // Armazena o code_verifier no metadata do state para que possa ser
+          // recuperado no callback mesmo em outra instância (multi-processo)
+          this.stateStore.updateMetadata(state, { codeVerifier: verifier })
+        } else {
+          // Fallback in-memory para compatibilidade (single-processo)
+          this.codeVerifiers.set(state, { verifier, createdAt: Date.now() })
+        }
       }
     }
     return url.toString()
@@ -159,8 +163,16 @@ export class OAuthClient {
     return this.stateStore?.consume(state) ?? null
   }
 
-  /** Code verifier ativo para um state (PKCE), se ainda não expirado. */
-  getCodeVerifier(state: string): string | undefined {
+  /** Recupera o code_verifier PKCE do metadata do state (stateStore ou fallback in-memory). */
+  getCodeVerifierFromState(state: string): string | undefined {
+    // Primeiro tenta no stateStore (multi-processo)
+    if (this.stateStore !== undefined) {
+      const entry = this.stateStore.get(state)
+      if (entry?.metadata?.codeVerifier) {
+        return entry.metadata.codeVerifier as string
+      }
+    }
+    // Fallback in-memory (compatibilidade single-processo)
     const stored = this.codeVerifiers.get(state)
     if (stored === undefined) return undefined
     if (Date.now() - stored.createdAt > PKCE_TTL_MS) {
@@ -168,6 +180,11 @@ export class OAuthClient {
       return undefined
     }
     return stored.verifier
+  }
+
+  /** @deprecated Use getCodeVerifierFromState. Mantido para compatibilidade. */
+  getCodeVerifier(state: string): string | undefined {
+    return this.getCodeVerifierFromState(state)
   }
 
   private resolveState(options: AuthorizationUrlOptions): string | undefined {
@@ -191,7 +208,7 @@ export class OAuthClient {
     if (this.pkceEnabled) {
       const verifier =
         options.codeVerifier ??
-        (options.state !== undefined ? this.getCodeVerifier(options.state) : undefined)
+        (options.state !== undefined ? this.getCodeVerifierFromState(options.state) : undefined)
       if (verifier !== undefined) body.code_verifier = verifier
     }
     return this.tokenRequest(body)
