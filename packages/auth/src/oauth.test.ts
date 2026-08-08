@@ -120,6 +120,44 @@ describe('OAuthClient.stateStore (CSRF)', () => {
   it('deve retornar null no consumeState sem stateStore', () => {
     expect(client().consumeState('qualquer')).toBeNull()
   })
+
+  it('consumeState preserva o code_verifier para a troca do code (Rodada 8)', async () => {
+    let verifierEnviado: string | undefined
+    mockFetch((_url, init) => {
+      const body = JSON.parse(String(init.body))
+      verifierEnviado = body.code_verifier
+      return json({
+        access_token: 'access-1',
+        token_type: 'bearer',
+        expires_in: 21600,
+        scope: 'read',
+      })
+    })
+
+    const store = new OAuthStateStore()
+    const ml = new OAuthClient({
+      clientId: 'APP_ID',
+      clientSecret: 'SECRET',
+      stateStore: store,
+      pkce: true,
+    })
+    // Estado gerado e armazenado pelo stateStore com o code_verifier no metadata.
+    const url = ml.authorizationUrl({ redirectUri: 'https://app.com/callback' })
+    const state = new URL(url).searchParams.get('state') as string
+
+    // Fluxo documentado no README: valida/consome o state no callback (CSRF)…
+    const entry = ml.consumeState(state)
+    expect(entry).not.toBeNull()
+    expect(ml.consumeState(state)).toBeNull() // consumido de fato
+
+    // …e só então troca o code: o code_verifier NÃO pode ter ido junto.
+    const token = await ml.exchangeCode('code-1', {
+      redirectUri: 'https://app.com/callback',
+      state,
+    })
+    expect(token.accessToken).toBe('access-1')
+    expect(verifierEnviado).toBeTruthy()
+  })
 })
 
 describe('OAuthClient.exchangeCode', () => {

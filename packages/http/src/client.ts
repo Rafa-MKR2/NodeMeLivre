@@ -1,12 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { type Logger, silentLogger } from '@nodemelivre/core'
-import {
-  ApiError,
-  InputValidationError,
-  NetworkError,
-  RateLimitError,
-  toApiError,
-} from '@nodemelivre/errors'
+import { ApiError, NetworkError, RateLimitError, toApiError } from '@nodemelivre/errors'
 import { MAX_WAIT_MS, type RateLimiter, rateLimitKey } from './rate-limit.js'
 import {
   DEFAULT_RETRY,
@@ -14,6 +8,7 @@ import {
   exponentialBackoff,
   type RetryOptions,
 } from './retry.js'
+import { buildUrl, MAX_REDIRECTS, resolveRedirectTarget } from './url.js'
 export const MERCADO_LIVRE_BASE_URL = 'https://api.mercadolibre.com'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD'
@@ -74,12 +69,6 @@ export interface HttpClientOptions {
 }
 
 const JSON_CONTENT_TYPE = 'application/json'
-
-/** Máximo de redirecionamentos seguidos manualmente (anti-loop). */
-const MAX_REDIRECTS = 5
-
-/** Hosts para os quais redirecionamentos são autorizados (além do próprio baseUrl). */
-const ALLOWED_REDIRECT_HOSTS = new Set(['api.mercadolibre.com', 'api.mercadolivre.com.br'])
 
 export class HttpClient extends EventEmitter<HttpClientEvents> {
   private readonly baseUrl: string
@@ -374,57 +363,8 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
   }
 }
 
-function buildUrl(baseUrl: string, path: string, query: HttpClientRequest['query']): URL {
-  // Guard de origem (Rodada 6): o path DEVE ser relativo ao baseUrl. Um path
-  // absoluto (`https://evil.com/x`) ou protocol-relative (`//evil.com/x`)
-  // faria o `new URL` pular para outro origin — levando o Authorization do
-  // integrador junto (confused deputy: o chamador acha que fala com o ML).
-  // As resources tipadas já bloqueiam via assertValidId; esta é a defesa
-  // para `ml.http.*` (API pública) e qualquer path não validado.
-  if (path.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(path)) {
-    throw new InputValidationError(
-      'path deve ser relativo ao baseUrl (sem protocolo nem host) — use ex.: /items/MLB1',
-    )
-  }
-  const url = new URL(path, baseUrl)
-  for (const [name, value] of Object.entries(query ?? {})) {
-    if (value !== undefined) {
-      url.searchParams.set(name, String(value))
-    }
-  }
-  return url
-}
-
 function isRedirectStatus(status: number): boolean {
   return status === 301 || status === 302 || status === 303 || status === 307 || status === 308
-}
-
-/**
- * Valida e resolve um destino de redirecionamento.
- *
- * Autoriza apenas: mesmo host do baseUrl (ou subdomínio), ou os hosts
- * oficiais do Mercado Livre. Rejeita downgrade https→http e qualquer outro
- * protocolo/host — impede que um `Location` malicioso (ex.: endpoint de
- * metadata da nuvem) receba o `Authorization` do SDK.
- */
-function resolveRedirectTarget(current: URL, location: string): URL | null {
-  let next: URL
-  try {
-    next = new URL(location, current)
-  } catch {
-    return null
-  }
-
-  // Nunca rebaixar https→http nem aceitar protocolos não-HTTP.
-  if (next.protocol !== 'https:' && next.protocol !== 'http:') return null
-  if (current.protocol === 'https:' && next.protocol !== 'https:') return null
-
-  const host = next.hostname.toLowerCase()
-  const sameHost = host === current.hostname.toLowerCase()
-  const subdomain = host.endsWith(`.${current.hostname.toLowerCase()}`)
-  const official = [...ALLOWED_REDIRECT_HOSTS].some((h) => host === h || host.endsWith(`.${h}`))
-  if (!sameHost && !subdomain && !official) return null
-  return next
 }
 
 async function parseBody(

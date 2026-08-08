@@ -18,7 +18,9 @@ Auditoria de segurança complementar ao [DOCUMENTO_CORRECOES.md](../DOCUMENTO_CO
 
 Em **sete rodadas** (auditoria inicial + re-auditoria exaustiva com execução real de experimentos e revisão independente + verificação adicional com revisor independente + auditoria focada em OAuth/PKCE/timing/concorrência + auditoria focada em DoS/erros/payloads + auditoria cega independente com confirmação por execução + auditoria de supply chain/CI), foram identificados **29 achados** (1 média-alta, 8 médias, 3 baixa-média, 17 baixos). **27 correções foram implementadas**, 1 item documentado (eventos) e 1 mitigado (temp previsível do `FileTokenStore`). O estado atual é **verde**: 325 testes, lint, typecheck, build e `npm run security:check` (33/33) passando.
 
-**Veredito:** o SDK estava **acima da média** em higiene (CSPRNG para state, token em arquivo com `0o600`, sem segredos em logs, rate-limit por recurso não-fragmentado). Os vetores com impacto real — path traversal via normalização de URL, bypass de SSRF por trailing dot e perda de token na re-autenticação — foram corrigidos e cobertos por testes.
+Em **Rodada 8** (análise fria independente, com confirmação de cada vetor por execução real), foram identificados **4 achados novos** (1 média-alta, 2 médias, 1 baixa-média) + **9 observações baixas**. O destaque é o **ACHADO 30: um bypass do fix do ACHADO 19** — o origin guard do `buildUrl` é contornável por whitespace/C0 leading, exfiltrando o `Authorization` para outro origin. Esse é o único achado da Rodada 8 com impacto de segurança real e, por ser uma **regressão de um vetor já corrigido**, tem prioridade máxima. **Os achados 30-33 foram corrigidos e cobertos por testes**: o origin guard agora valida o **resultado** do parse (não o input); o PKCE sobrevive ao `consumeState`; o lock do `FileTokenStore` tem recuperação de stale + timeout; e o `DeduplicatingLogger` nunca lança com contexto circular. O `security:check` migrou a checagem do origin guard (e demais) para execução real dos payloads.
+
+**Veredito:** o SDK estava **acima da média** em higiene (CSPRNG para state, token em arquivo com `0o600`, sem segredos em logs, rate-limit por recurso não-fragmentado). Os vetores com impacto real das rodadas 1-8 — path traversal via normalização de URL, bypass de SSRF por trailing dot, perda de token na re-autenticação e o bypass do origin guard por whitespace/C0 — foram corrigidos e cobertos por testes. A Rodada 8 expôs que o `security:check` validava por presença de string em vez de semântica (deixando o bypass passar no CI); a checagem do origin guard agora executa os payloads maliciosos de verdade.
 
 ---
 
@@ -87,6 +89,29 @@ Em **sete rodadas** (auditoria inicial + re-auditoria exaustiva com execução r
 | 27 | CI não rodava `npm audit` — vulnerabilidades de dependências passavam despercebidas | 🟢 Baixa | ✅ Corrigido | `npm audit --omit=dev --audit-level=high` nos 2 workflows |
 | 28 | Dependências internas `@nodemelivre/*` com `"*"` — não fixam compatibilidade ao publicar | 🟢 Baixa | ✅ Corrigido | `^1.0.0-beta.1` em todos os 14 manifests + lockfile |
 | 29 | Actions do CI por **tag móvel** (`@v4`/`@v5`) — o dono do repo da action pode sobrescrever a tag com outro código (supply chain) | 🟢 Baixa | ✅ Corrigido | pin por SHA (commit imutável) + comentário da versão nos 2 workflows |
+
+### Rodada 8 — análise fria independente (confirmação por execução)
+
+| # | Achado | Severidade | Status | Onde |
+|---|--------|------------|--------|------|
+| 30 | **Bypass do origin guard no `buildUrl`** — whitespace/C0 leading (`  //evil.com/x`, `\thttps://evil.com/x`) passa no guard antigo (regex/startsWith no input); o WHATWG URL parser ignora whitespace leading → `Authorization` vaza para outro origin (regressão do fix do ACHADO 19) | 🔴 Média-Alta | ✅ Corrigido | `packages/http/src/url.ts` — `buildUrl` valida o **resultado** do parse (`url.origin !== new URL(baseUrl).origin`); teste com 7 payloads maliciosos em `client.test.ts` sem chegar ao fetch; `security-check` executa os vetores |
+| 31 | **PKCE: `consumeState()` destrói o `code_verifier` antes do `authenticate()`** — fluxo documentado no README (validar state no callback) quebra a troca do code para apps PKCE (`invalid_request`) | 🟡 Média | ✅ Corrigido | `oauth.ts` — `consumeState` estaciona o `codeVerifier` no fallback in-memory (TTL + limite) ao consumir; teste do fluxo completo (consume → troca envia `code_verifier`) |
+| 32 | **`.lock` stale do `FileTokenStore` = deadlock permanente** — `acquireLock` girava `while(true)` em `EEXIST` sem timeout nem detecção de stale; um crash (SIGKILL/OOM/deploy) travava TODAS as operações de token para sempre (o lease tem TTL, o lock não) | 🟡 Média | ✅ Corrigido | `token.ts` — `acquireLock` assume locks com mtime > TTL (mesma política do lease) e estoura timeout `OAuthError` em `lockTimeoutMs` (opções injetáveis); testes de stale e timeout |
+| 33 | **`DeduplicatingLogger.makeKey` estoura com contexto circular** — `JSON.stringify(context)` lança `TypeError` dentro de catch handlers do `HttpClient`/`TokenManager` (que logam `{ err }`), substituindo o erro original | 🟡 Baixa-Média | ✅ Corrigido | `logger.ts` — `safeStringify` com `WeakSet` de objetos visitados (+ fallback `[unserializable]`); teste com cadeia de `cause` circular |
+
+**Observações baixas (Rodada 8, sem correção pendente):**
+
+| # | Observação | Onde |
+|---|------------|------|
+| O1 | `readBackup()` reescreve o arquivo principal **sem lock** — corrida com escrita concorrente pode regredir o token | `token.ts` |
+| O2 | PKCE **desabilitado por padrão** (`pkce: false`) — apps novos (2025/2026, ML exige verifier) quebram com `invalid_request` sem mensagem clara | `oauth.ts` |
+| O3 | Heurística do `parseResetAt`: valor ≤ 1e9 é tratado como "segundos restantes" — mudança de formato do ML pode causar espera de 5 min à toa | `rate-limit.ts` |
+| O4 | Evento `response` emite a `Response` **não-consumida** — listener que ler o body quebra o parse do SDK | `client.ts` |
+| O5 | `security:check` valida por **presença de substring**, não semântica — o ACHADO 30 passou por isso; **parcialmente mitigado**: a checagem do origin guard agora executa os payloads maliciosos de verdade (`client.test.ts` no dinâmico) | `security-check.mjs` |
+| O6 | `questions.search` e `messages.send` (estrutura `from`/`to`) sem validação de shape — payload malformado vai à API | `questions.ts` / `messages.ts` |
+| O7 | `waitForLeaseRelease` usa `updatedAt` do store (`Date.now()`) e não o clock injetado do `TokenManager` — divergência em testes com clock fake | `refresh.ts` |
+| O8 | `FileTokenStore.clear()` deixa o `.bak` órfão | `token.ts` |
+| O9 | Lint: warning `__proto__` em `resilience.test.ts` (aceitável; idealmente supressão documentada) | `resilience.test.ts` |
 
 ---
 
@@ -637,6 +662,119 @@ O token era escrito com `mode: 0o600`, mas o lease (`writeFile` sem mode) e o lo
 
 ---
 
+## 🔴 ACHADO 30 — Bypass do origin guard no `buildUrl` por backslash e whitespace (Rodada 8)
+
+### Localização
+```
+packages/http/src/client.ts — buildUrl(): guard de origem
+```
+
+### Descrição do Problema
+O fix do ACHADO 19 valida o **input** do path com dois checagens: `path.startsWith('//')` e um regex de protocolo (`/^[a-z][a-z0-9+.-]*:/i`). Ambas são contornáveis porque o parser WHATWG de URL:
+
+- **ignora whitespace e C0 control leading/trailing** antes de parsear;
+- **trata backslash (`\`) como `/`** na posição de autoridade para esquemas especiais (http/https).
+
+### Evidência (execução real)
+```
+new URL('\\evil.com/x', base)          → https://evil.com/x   ← backslash = protocol-relative
+new URL('  //evil.com/x', base)        → https://evil.com/x   ← whitespace leading ignorado
+new URL('\thttps://evil.com/y', base)  → https://evil.com/y   ← tab leading ignorado
+new URL(' https://evil.com/z', base)   → https://evil.com/z
+```
+Todas passam no guard (`guard-blocked: false`) e resolvem para outro origin — com o `Authorization: Bearer` do vendedor montado e enviado no primeiro hop (não há redirect para "salvar": a requisição inicial já vai para o origin malicioso).
+
+### Contexto que Reduz o Risco
+As resources tipadas validam IDs via `assertValidId` (o pattern `/^[A-Za-z0-9_-]+$/` rejeita `\` e espaços), então o vetor só abre via `ml.http.get(path)` — mas `ml.http` é **API pública documentada**, o mesmo threat model do ACHADO 19 (confused deputy: o chamador acha que fala com o ML).
+
+### Por Que o `security:check` Não Pegou
+O item 13 do `security-check.mjs` valida o fix por **presença de substring** (`content.includes("path.startsWith('//')")`), não por execução do vetor. O guard existe, está incorreto, e o CI reporta verde.
+
+### Correção Proposta
+Validar o **resultado** do parse em vez do input:
+
+```ts
+const url = new URL(path, baseUrl)
+if (url.origin !== new URL(baseUrl).origin) {
+  throw new InputValidationError('path deve ser relativo ao baseUrl')
+}
+```
+
+Cobre qualquer forma de escape (backslash, whitespace, C0, unicode lookalikes) sem depender de regex no input. **Testes:** `\\evil.com/x`, `  //evil.com/x`, `\thttps://evil.com/y` devem lançar `InputValidationError` sem chamar o fetch; **security:check**: adicionar checagem dinâmica (execução real dos payloads), não só presença de string.
+
+---
+
+## 🟡 ACHADO 31 — PKCE: `consumeState()` destrói o `code_verifier` antes do `authenticate()` (Rodada 8)
+
+### Localização
+```
+packages/auth/src/state.ts — consume(): deleta a entry (incl. metadata)
+packages/auth/src/oauth.ts — getCodeVerifierFromState(): stateStore.get(state)
+```
+
+### Descrição do Problema
+`consumeState(state)` remove a entry do store — inclusive o `metadata.codeVerifier` armazenado pelo PKCE. No callback, `authenticate(redirectUri, code, state)` depende de `getCodeVerifierFromState(state)` → `stateStore.get(state)` para recuperar o verifier. Se o state já foi consumido, o verifier não é encontrado, o `code_verifier` **não entra no body** do `/oauth/token` e o ML rejeita com `invalid_request` para apps PKCE.
+
+O README instrui exatamente essa ordem ("o `state` é gerado e armazenado automaticamente na URL de autorização e validado no callback via `ml.consumeState()`") — o caminho "certinho" é o que quebra.
+
+### Evidência (execução real)
+```
+consumeState retornou entry? true
+code_verifier enviado no token request? false
+body: ["grant_type","client_id","client_secret","code","redirect_uri"]   ← sem code_verifier
+```
+
+### Correção Proposta
+`saveAuthorizationCode`/`authenticate` deve recuperar o `code_verifier` do metadata **antes** de consumir o state — ou fazer consume+validação **atomicamente** (consumir dentro do `authenticate` e retornar a entry). Documentar a ordem correta no README para quem mantém `consumeState` manual.
+
+---
+
+## 🟡 ACHADO 32 — `.lock` stale do `FileTokenStore` = deadlock permanente (Rodada 8)
+
+### Localização
+```
+packages/auth/src/token.ts — acquireLock(): while (true) em EEXIST
+```
+
+### Descrição do Problema
+`acquireLock` cria o arquivo `.lock` com `O_CREAT | O_EXCL` e, em `EEXIST`, espera 10ms e **tenta para sempre** — sem timeout nem detecção de stale. O lease de refresh tem TTL (30s) e holderId; o lock **não tem nenhum mecanismo de recuperação**. Se um processo morrer segurando o lock (SIGKILL, OOM, kill do deploy, perda de energia), o `.lock` fica órfão e **todas** as operações de token (`get`, `compareAndSet`, `set`, `clear`, `acquireLease`, `renewLease`, `releaseLease`) ficam presas em busy-loop de 10ms — indisponibilidade permanente até remoção manual.
+
+### Evidência (execução real)
+```
+cria .lock manualmente (simulando crash) → compareAndSet trave > 3s (busy-loop, sem exceção)
+```
+
+### Correção Proposta
+- Registrar timestamp no conteúdo do lock e **remover locks com idade > TTL** (mesma política do lease) antes de adquirir;
+- Adicionar **timeout na aquisição** (lançar `OAuthError`/erro tipado em vez de girar infinitamente);
+- Teste: lock stale (antigo) é assumido e a operação prossegue.
+
+---
+
+## 🟡 ACHADO 33 — `DeduplicatingLogger.makeKey` estoura com contexto circular (Rodada 8)
+
+### Localização
+```
+packages/core/src/logger.ts — makeKey(): JSON.stringify(context)
+```
+
+### Descrição do Problema
+`makeKey` serializa o contexto com `JSON.stringify(context)` **sem try/catch**. Um objeto circular lança `TypeError: Converting circular structure to JSON`. O SDK chama `this.logger.debug({ err: error, url })` **dentro de catch handlers** do `HttpClient` (client.ts) e do `TokenManager` — e erros de fetch do Node (undici) são conhecidos por formar cadeias de `cause` circulares. Um logger que lança dentro do handler **substitui o erro original** e pode derrubar o tratamento da requisição (erro mascarado, retry/fail behavior alterado).
+
+### Evidência (execução real)
+```
+JSON.stringify({ err: circulo, url })          → TypeError: Converting circular structure to JSON
+JSON.stringify({ err: NetworkError(circular) }) → TypeError (idem)
+```
+
+### Contexto que Reduz o Risco
+`DeduplicatingLogger` é opcional (o default é `silentLogger`); só afeta quem o configura. Ainda assim, é uma armadilha latente em um componente de observabilidade que deveria **nunca** lançar.
+
+### Correção Proposta
+Safe-stringify (WeakSet de objetos visitados) ou `try/catch` com fallback `[unserializable]` em `makeKey`. Teste: contexto circular não lança e o log é deduplicado/suprimido normalmente.
+
+---
+
 ## ✅ Verificações da Rodada 4 — OAuth/PKCE, timing e concorrência (sem problema)
 
 | Vetor | Resultado |
@@ -659,10 +797,12 @@ O token era escrito com `mode: 0o600`, mas o lease (`writeFile` sem mode) e o lo
 
 Para impedir regressão dos vetores corrigidos, o monorepo tem `npm run security:check` (`scripts/security-check.mjs`, Node puro, zero dependências) rodando no CI entre os testes e o build:
 
+> **Limitação conhecida (Rodada 8, parcialmente mitigada):** o estágio estático valida vários fixes por **presença de substring** no código-fonte, não por execução do vetor. Foi exatamente o que deixou o ACHADO 30 (bypass por whitespace/C0) passar verde na Rodada 6: o guard existia, mas validava o **input** em vez do **resultado** do parse. Na correção do ACHADO 30, a checagem do origin guard foi migrada para **execução real dos payloads maliciosos** (7 vetores em `client.test.ts`, rodados no estágio dinâmico) + checagem estática por semântica (`url.origin !== new URL(baseUrl).origin`). Os demais itens estáticos seguem como guarda de regressão por presença.
+
 | Estágio | Cobre |
 |---|---|
-| **1. Estático** (scan) | segredos hardcoded em `packages/*/src`; APIs removidas não podem ressurgir (`assertValidItemInput`, `getGlobalOAuthStateStore`, `resetGlobalOAuthStateStore`, `securityHeaders`, `SECURITY_HEADERS`); `Math.random` em código do auth (CSPRNG); chaves `__proto__`/`constructor`/`prototype` fora do `UNSAFE_KEYS`; presença dos fixes: trailing dot no `httpUrlSchema` (Rodada 3), `sanitizeLog` com NEL/DEL (Rodadas 2-3), `randomBytes` no instanceId e limite do fallback de `code_verifier` (Rodada 4), `ApiError.message` sanitizado (Rodada 3), `deepOmitEmpty` iterativo, guard de página repetida no `paginate` e `MAX_WAIT_MS` no rate limit (Rodada 5), origin guard no `buildUrl`, drop de Authorization cross-origin, cap do `Retry-After`, DNS wildcard e IPv6 transition no `httpUrlSchema`, `UNSAFE_KEYS` no `parallel`, `0o600` no lease/lock (Rodada 6); supply chain/CI: dependências internas com versão real (sem `"*"`), `permissions` mínimas nos workflows, `npm audit` e `security:check` no CI, `timeout-minutes`, actions pinadas por SHA, dependabot configurado (Rodada 7) |
-| **2. Dinâmico** | executa os 14 arquivos de teste de segurança (schemas, http client/integration, utils, webhooks, errors, refresh/oauth, questions, items, pagination, rate-limit, resilience, token) — 33/33 checagens |
+| **1. Estático** (scan) | segredos hardcoded em `packages/*/src`; APIs removidas não podem ressurgir (`assertValidItemInput`, `getGlobalOAuthStateStore`, `resetGlobalOAuthStateStore`, `securityHeaders`, `SECURITY_HEADERS`); `Math.random` em código do auth (CSPRNG); chaves `__proto__`/`constructor`/`prototype` fora do `UNSAFE_KEYS`; presença dos fixes: trailing dot no `httpUrlSchema` (Rodada 3), `sanitizeLog` com NEL/DEL (Rodadas 2-3), `randomBytes` no instanceId e limite do fallback de `code_verifier` (Rodada 4), `ApiError.message` sanitizado (Rodada 3), `deepOmitEmpty` iterativo, guard de página repetida no `paginate` e `MAX_WAIT_MS` no rate limit (Rodada 5), origin guard por **resultado** do parse, drop de Authorization cross-origin, cap do `Retry-After`, DNS wildcard e IPv6 transition no `httpUrlSchema`, `UNSAFE_KEYS` no `parallel`, `0o600` no lease/lock (Rodada 6); supply chain/CI: dependências internas com versão real (sem `"*"`), `permissions` mínimas nos workflows, `npm audit` e `security:check` no CI, `timeout-minutes`, actions pinadas por SHA, dependabot configurado (Rodada 7); Rodada 8: `consumeState` estaciona o `code_verifier`, `acquireLock` com stale + timeout, `safeStringify` no logger |
+| **2. Dinâmico** | executa os 15 arquivos de teste de segurança (schemas, http client/integration, utils, webhooks, errors, refresh/oauth, questions, items, pagination, rate-limit, resilience, token, logger) — 36/36 checagens |
 
 `npm run security:static` roda apenas o estágio 1 (mais rápido para desenvolvimento). Uma violação falha o CI com exit code 1.
 
@@ -687,10 +827,11 @@ Para impedir regressão dos vetores corrigidos, o monorepo tem `npm run security
 
 | Severidade | Achados | Status |
 |---|---|---|
-| 🔴 Média-Alta | Path traversal (1) | ✅ Corrigido |
-| 🟡 Média | SSRF trailing dot (10), Log injection webhooks (6), Re-auth perde token (13), `deepOmitEmpty` stack overflow (16), `paginate` loop infinito (17), `RateLimiter` espera gigante (18), Origin escape no `buildUrl` (19), DNS wildcard (20) | ✅ Corrigido |
-| 🟡 Baixa-Média | SSRF no schema (2), Redirects (3), IPv6 transition (21) | ✅ Corrigido |
+| 🔴 Média-Alta | Path traversal (1), Origin guard bypass (30) | ✅ Corrigido |
+| 🟡 Média | SSRF trailing dot (10), Log injection webhooks (6), Re-auth perde token (13), `deepOmitEmpty` stack overflow (16), `paginate` loop infinito (17), `RateLimiter` espera gigante (18), Origin escape no `buildUrl` (19), DNS wildcard (20), PKCE consumeState (31), `.lock` stale deadlock (32) | ✅ Corrigido |
+| 🟡 Baixa-Média | SSRF no schema (2), Redirects (3), IPv6 transition (21), `DeduplicatingLogger` circular (33) | ✅ Corrigido |
 | 🟢 Baixa | `reply` NaN (4), Eventos (5), Prototype (7), API IDs (8), temp previsível (9), `ApiError.message` (11), NEL/DEL (12), instanceId previsível (14), code_verifier leak (15), Authorization cross-origin (22), `parallel` `__proto__` (23), permissões lease/lock (24), CI sem permissions (25), sem timeout (26), sem npm audit (27), deps com `"*"` (28), actions por tag móvel (29) | ✅ Corrigido / 📚 Documentado |
+| 🟢 Baixa | Observações O1–O9 (Rodada 8) | 📚 Registrado |
 
 ---
 
@@ -705,4 +846,4 @@ Para impedir regressão dos vetores corrigidos, o monorepo tem `npm run security
 
 ---
 
-*Auditoria baseada em leitura dos 14 pacotes (src + testes), execução real de experimentos para confirmação dos vetores (URL parser na Rodada 3; refresh/re-auth/PKCE na Rodada 4; deepOmitEmpty/paginate/rate-limit na Rodada 5; buildUrl/redirect/DNS/IPv6/parallel/permissões na Rodada 6 — auditada por analista independente; lockfile/npm audit/workflows na Rodada 7), e validação final com 325 testes, lint, typecheck, build e `npm run security:check` (33/33) verdes (Rodadas 1–2 no commit `3ae58fb`; Rodada 3 no commit `2aa5ed0`; Rodada 4 no commit `506d6c8`; Rodadas 5-6 no commit `976e710`).*
+*Auditoria baseada em leitura dos 14 pacotes (src + testes), execução real de experimentos para confirmação dos vetores (URL parser na Rodada 3; refresh/re-auth/PKCE na Rodada 4; deepOmitEmpty/paginate/rate-limit na Rodada 5; buildUrl/redirect/DNS/IPv6/parallel/permissões na Rodada 6 — auditada por analista independente; lockfile/npm audit/workflows na Rodada 7; origin guard/whitespace+C0, PKCE consumeState, lock stale e logger circular na Rodada 8), e validação final com 330 testes, lint, typecheck, build e `npm run security:check` (36/36) verdes (Rodadas 1–2 no commit `3ae58fb`; Rodada 3 no commit `2aa5ed0`; Rodada 4 no commit `506d6c8`; Rodadas 5-6 no commit `976e710`; Rodada 7 no commit `44562d4`; Rodada 8 — correção dos achados 30-33 e migração do `security:check` para execução real dos payloads).*

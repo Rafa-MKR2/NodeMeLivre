@@ -50,6 +50,24 @@ describe('DeduplicatingLogger', () => {
     logger.stop()
   })
 
+  it('não deve lançar com contexto circular (ACHADO 33, Rodada 8)', () => {
+    const inner = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }
+    const logger = new DeduplicatingLogger(inner)
+
+    const circulo: { self?: unknown; err?: unknown } = {}
+    circulo.self = circulo
+    const err = new TypeError('network failure')
+    err.cause = circulo // cadeia de cause circular como a do undici
+    circulo.err = err
+
+    expect(() =>
+      logger.error({ err, url: 'https://api.mercadolibre.com/x' }, 'falha'),
+    ).not.toThrow()
+    // O log é emitido normalmente (deduplicação por chave estável).
+    expect(inner.error).toHaveBeenCalledTimes(1)
+    logger.stop()
+  })
+
   it('deve emitir resumo periódico para logs suprimidos', () => {
     vi.useFakeTimers()
     try {

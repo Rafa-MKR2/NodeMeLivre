@@ -48,7 +48,7 @@ export class DeduplicatingLogger implements Logger {
   }
 
   private makeKey(level: string, message: string, context?: unknown): string {
-    const ctxStr = context ? JSON.stringify(context) : ''
+    const ctxStr = context ? safeStringify(context) : ''
     return `${level}:${message}:${ctxStr}`
   }
 
@@ -168,6 +168,24 @@ export class DeduplicatingLogger implements Logger {
     if (this.cleanupTimer.unref) {
       this.cleanupTimer.unref()
     }
+  }
+}
+
+/** Serializa contexto para a chave de deduplicação sem lançar em estruturas circulares. */
+function safeStringify(value: unknown): string {
+  const seen = new WeakSet<object>()
+  try {
+    return JSON.stringify(value, (_key, item) => {
+      if (typeof item === 'object' && item !== null) {
+        if (seen.has(item)) return '[Circular]'
+        seen.add(item)
+      }
+      return item
+    })
+  } catch {
+    // Não pode lançar dentro de catch handlers do SDK (ex.: logar `{ err }`
+    // com cadeias de `cause` circulares do undici) — substitui o erro original.
+    return '[unserializable]'
   }
 }
 

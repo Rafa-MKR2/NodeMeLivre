@@ -166,7 +166,18 @@ export class OAuthClient {
    * ou já tiver sido consumido.
    */
   consumeState(state: string): OAuthStateEntry | null {
-    return this.stateStore?.consume(state) ?? null
+    const entry = this.stateStore?.consume(state) ?? null
+    // ACHADO 31 (Rodada 8): o consume apaga a entry do store — junto com o
+    // `metadata.codeVerifier` do PKCE. Se o chamador seguir o fluxo
+    // documentado ("validar no callback via consumeState e depois trocar o
+    // code"), o verifier não estaria mais disponível e o `/oauth/token`
+    // responderia `invalid_request`. Estacionamos o verifier no fallback
+    // in-memory (com TTL e limite) para a troca seguinte funcionar.
+    const verifier = entry?.metadata?.codeVerifier
+    if (typeof verifier === 'string') {
+      this.setCodeVerifier(state, verifier)
+    }
+    return entry
   }
 
   /**

@@ -1,6 +1,7 @@
-import { mkdtemp, rm, stat } from 'node:fs/promises'
+import { mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { OAuthError } from '@nodemelivre/errors'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { type AccessToken, FileTokenStore, InMemoryTokenStore } from './token.js'
 
@@ -81,5 +82,32 @@ describe('FileTokenStore', () => {
     // O lease não contém segredo, mas segue a mesma disciplina (Rodada 6).
     const leaseMode = (await stat(`${filePath}.lease`)).mode & 0o777
     expect(leaseMode).toBe(0o600)
+  })
+
+  it('deve assumir lock órfão (stale) e prosseguir (ACHADO 32)', async () => {
+    const filePath = join(dir, 'token.json')
+    const lockPath = `${filePath}.lock`
+    // Simula crash: .lock deixado para trás por um processo morto.
+    await writeFile(lockPath, JSON.stringify({ createdAt: 0 }))
+    const old = (Date.now() - 60_000) / 1000 // 60s atrás
+    await utimes(lockPath, old, old)
+
+    const store = new FileTokenStore({ filePath })
+    await store.set(token()) // não deve travar nem lançar
+
+    expect(await store.get()).toMatchObject({ accessToken: 'access-1' })
+    // O lock órfão foi removido e um novo foi adquirido/releaseado.
+    await expect(stat(lockPath)).rejects.toThrow()
+  })
+
+  it('deve lançar OAuthError ao estourar o timeout de lock (anti-deadlock) (ACHADO 32)', async () => {
+    const filePath = join(dir, 'token.json')
+    const lockPath = `${filePath}.lock`
+    // Lock "vivo" (mtime recente): não é stale, então não é assumido.
+    await writeFile(lockPath, JSON.stringify({ createdAt: Date.now() }))
+
+    const store = new FileTokenStore({ filePath, lockTimeoutMs: 50, lockStaleMs: 60_000 })
+    const err = await store.set(token()).catch((e) => e)
+    expect(err).toBeInstanceOf(OAuthError)
   })
 })

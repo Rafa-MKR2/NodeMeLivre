@@ -235,6 +235,30 @@ describe('HttpClient.request', () => {
     expect(spy).not.toHaveBeenCalled() // o token nunca sai do processo
   })
 
+  it('deve rejeitar bypass do origin guard por whitespace/C0 leading (Rodada 8)', async () => {
+    const spy = mockFetch(() => json({ ok: true }))
+    const clientInstance = client({ auth: provider('token-123') })
+
+    // O WHATWG URL parser ignora whitespace/C0 leading: `  //evil.com/x` e
+    // `\thttps://evil.com/y` passam no guard antigo (regex/startsWith no input)
+    // e resolvem para outro origin — exfiltrando o Authorization.
+    const vectors = [
+      '  //evil.com/x', // espaço leading
+      '\t//evil.com/x', // tab leading
+      '\r//evil.com/x', // CR leading
+      '\u0001//evil.com/x', // C0 control leading
+      '\f//evil.com/x', // form feed leading
+      ' https://evil.com/z', // espaço leading + scheme
+      '\thttps://evil.com/y', // tab leading + scheme
+    ]
+    for (const path of vectors) {
+      const err = await clientInstance.get(path).catch((e) => e)
+      expect(err).toBeInstanceOf(InputValidationError)
+    }
+
+    expect(spy).not.toHaveBeenCalled() // nenhum vetor chegou ao fetch
+  })
+
   it('deve lançar NetworkError em falha de rede e não repetir POST', async () => {
     const spy = mockFetch(() => {
       throw new TypeError('fetch failed')

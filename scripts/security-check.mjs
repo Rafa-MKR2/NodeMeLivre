@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * security:check — verificação automatizada dos vetores-chave das 7 rodadas
+ * security:check — verificação automatizada dos vetores-chave das 8 rodadas
  * da auditoria de segurança (docs/auditoria-seguranca.md).
  *
  * Zero dependências: roda com Node puro + vitest (já devDependency).
@@ -71,7 +71,7 @@ function stripComments(content) {
     .join('\n')
 }
 
-console.log('🔒 security:check — vetores das 7 rodadas da auditoria\n')
+console.log('🔒 security:check — vetores das 8 rodadas da auditoria\n')
 
 // ────────────────────────────────────────────────────────────────────────────
 // ESTÁTICO — regressões que um teste unitário não pega (grep/scan)
@@ -226,13 +226,18 @@ console.log('Estágio 1 — varredura estática (padrões proibidos)\n')
   )
 }
 
-// 13. Origin guard no buildUrl (Rodada 6, confused deputy via path absoluto)
+// 13. Origin guard no buildUrl (Rodadas 6 + 8): o fix antigo (regex/
+//     startsWith no INPUT) era contornável por backslash e whitespace/C0
+//     leading — o guard agora valida o origin RESOLVIDO (`url.origin !==
+//     new URL(baseUrl).origin`), cobrindo qualquer forma de escape. A
+//     confirmação por execução real dos payloads está no dinâmico
+//     (client.test.ts — Rodada 8).
 {
-  const client = join(SRC, 'http', 'src', 'client.ts')
-  const content = readFileSync(client, 'utf8')
+  const urlModule = join(SRC, 'http', 'src', 'url.ts')
+  const content = readFileSync(urlModule, 'utf8')
   report(
-    'buildUrl rejeita path absoluto/protocol-relative (Rodada 6)',
-    content.includes("path.startsWith('//')") &&
+    'buildUrl valida origin por resultado (Rodadas 6+8)',
+    content.includes('url.origin !== new URL(baseUrl).origin') &&
       content.includes('InputValidationError') &&
       content.includes('relativo ao baseUrl'),
   )
@@ -391,6 +396,45 @@ console.log('Estágio 1 — varredura estática (padrões proibidos)\n')
   )
 }
 
+// 25. PKCE: consumeState preserva o code_verifier para a troca do code
+//     (ACHADO 31, Rodada 8) — o consume estaciona o verifier no fallback
+//     in-memory; coberto por execução real em oauth.test.ts.
+{
+  const oauth = join(SRC, 'auth', 'src', 'oauth.ts')
+  const content = readFileSync(oauth, 'utf8')
+  report(
+    'consumeState estaciona o code_verifier (ACHADO 31, Rodada 8)',
+    content.includes('consumeState(state: string): OAuthStateEntry | null') &&
+      content.includes('this.setCodeVerifier(state, verifier)'),
+  )
+}
+
+// 26. FileTokenStore: lock órfão é assumido + timeout na aquisição
+//     (ACHADO 32, Rodada 8) — sem isso, um .lock stale é deadlock
+//     permanente de todas as operações de token.
+{
+  const token = join(SRC, 'auth', 'src', 'token.ts')
+  const content = readFileSync(token, 'utf8')
+  report(
+    'acquireLock com stale + timeout (ACHADO 32, Rodada 8)',
+    content.includes('isLockStale()') &&
+      content.includes('LOCK_ACQUIRE_TIMEOUT_MS') &&
+      content.includes('lock_acquire_timeout'),
+  )
+}
+
+// 27. DeduplicatingLogger não lança com contexto circular (ACHADO 33,
+//     Rodada 8) — safe-stringify com WeakSet em makeKey; coberto por
+//     execução real em logger.test.ts.
+{
+  const logger = join(SRC, 'core', 'src', 'logger.ts')
+  const content = readFileSync(logger, 'utf8')
+  report(
+    'makeKey com safeStringify (ACHADO 33, Rodada 8)',
+    content.includes('function safeStringify') && content.includes('WeakSet'),
+  )
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // DINÂMICO — executa os testes que cobrem cada vetor
 // ────────────────────────────────────────────────────────────────────────────
@@ -423,6 +467,9 @@ const securityTestFiles = [
   // FileTokenStore 0o600
   join('packages', 'core', 'src', 'resilience.test.ts'),
   join('packages', 'auth', 'src', 'token.test.ts'),
+  // Rodada 8: origin guard por resultado (bypass whitespace/C0), PKCE
+  // consumeState preserva verifier, lock stale/timeout, logger circular
+  join('packages', 'core', 'src', 'logger.test.ts'),
 ]
 
 const missing = securityTestFiles.filter((f) => !statSync(join(ROOT, f), { throwIfNoEntry: false }))
@@ -455,4 +502,4 @@ if (failures > 0) {
   console.error(`❌ security:check FALHOU (${failures} violação(ões))`)
   process.exit(1)
 }
-console.log('✅ security:check — todos os vetores das 7 rodadas verificados')
+console.log('✅ security:check — todos os vetores das 8 rodadas verificados')

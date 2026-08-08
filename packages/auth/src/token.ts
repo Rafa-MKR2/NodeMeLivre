@@ -1,7 +1,13 @@
 import { createHash } from 'node:crypto'
 import type { FileHandle } from 'node:fs/promises'
-import { constants, mkdir, open, readFile, rm, writeFile } from 'node:fs/promises'
+import { constants, mkdir, open, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { OAuthError } from '@nodemelivre/errors'
+
+/** Idade máxima de um lock órfão antes de ser assumido (mesma política de TTL do lease). */
+const LOCK_STALE_MS = 30_000
+/** Tempo máximo esperando por um lock ocupado (anti-deadlock). */
+const LOCK_ACQUIRE_TIMEOUT_MS = 15_000
 
 /** Token de acesso do Mercado Livre, com expiração já resolvida em epoch ms. */
 export interface AccessToken {
@@ -173,6 +179,10 @@ export class InMemoryTokenStore implements TokenStore {
 export interface FileTokenStoreOptions {
   /** Caminho do arquivo de persistência. Padrão: `~/.nodemelivre/sdk-token.json`. */
   filePath?: string
+  /** Idade máxima de um lock órfão antes de ser assumido. Padrão: 30s (mesma política do lease). */
+  lockStaleMs?: number
+  /** Tempo máximo esperando por um lock ocupado. Padrão: 15s. */
+  lockTimeoutMs?: number
 }
 
 /**
@@ -183,11 +193,15 @@ export class FileTokenStore implements TokenStore {
   private readonly filePath: string
   private readonly lockPath: string
   private readonly leasePath: string
+  private readonly lockStaleMs: number
+  private readonly lockTimeoutMs: number
 
   constructor(options: FileTokenStoreOptions = {}) {
     this.filePath = options.filePath ?? defaultTokenFilePath()
     this.lockPath = `${this.filePath}.lock`
     this.leasePath = `${this.filePath}.lease`
+    this.lockStaleMs = options.lockStaleMs ?? LOCK_STALE_MS
+    this.lockTimeoutMs = options.lockTimeoutMs ?? LOCK_ACQUIRE_TIMEOUT_MS
   }
 
   async get(): Promise<AccessToken | null> {
@@ -360,26 +374,62 @@ export class FileTokenStore implements TokenStore {
     }
   }
 
-  /** Adquire lock de arquivo (cross-platform usando O_EXCL). */
+  /**
+   * Adquire lock de arquivo (cross-platform usando O_EXCL).
+   *
+   * Recuperação de lock órfão (ACHADO 32, Rodada 8): um crash (SIGKILL/OOM/
+   * deploy) deixava o `.lock` para trás e o antigo `while(true)` girava para
+   * sempre em `EEXIST` — deadlock permanente de TODAS as operações de token.
+   * Agora: (1) locks com idade > `LOCK_STALE_MS` são assumidos como mortos
+   * (mesma política de TTL do lease) e removidos antes de tentar de novo;
+   * (2) a espera total é limitada por `LOCK_ACQUIRE_TIMEOUT_MS` — ao estourar,
+   * lança `OAuthError` em vez de girar infinitamente.
+   */
   private async acquireLock(): Promise<FileHandle> {
     await mkdir(dirname(this.lockPath), { recursive: true })
-    let fd: FileHandle
-    while (true) {
+    const startedAt = Date.now()
+    for (;;) {
       try {
-        fd = await open(
+        const fd = await open(
           this.lockPath,
           constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY,
           0o600,
         )
+        // Marca o lock com o timestamp de criação (diagnóstico/debug). A
+        // detecção de stale usa o mtime do arquivo — robusto até para locks
+        // vazios deixados por versões antigas do SDK.
+        await fd.writeFile(JSON.stringify({ createdAt: Date.now() }), { encoding: 'utf8' })
         return fd
       } catch (error: unknown) {
-        if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {
-          // Lock ocupado, aguarda um pouco e tenta novamente
-          await new Promise((r) => setTimeout(r, 10))
+        if (!(error instanceof Error) || !('code' in error) || error.code !== 'EEXIST') {
+          throw error
+        }
+        // Anti-deadlock: nunca girar para sempre por um lock ocupado.
+        if (Date.now() - startedAt >= this.lockTimeoutMs) {
+          throw new OAuthError(
+            'lock_acquire_timeout',
+            `Não foi possível adquirir o lock de token em ${this.lockTimeoutMs}ms (${this.lockPath})`,
+          )
+        }
+        // Lock órfão (idade > TTL): assume como morto e remove antes de tentar de novo.
+        if (await this.isLockStale()) {
+          await rm(this.lockPath, { force: true })
           continue
         }
-        throw error
+        // Lock ocupado por um processo vivo: aguarda um pouco e tenta novamente.
+        await new Promise((r) => setTimeout(r, 10))
       }
+    }
+  }
+
+  /** `true` se o lock existir e estiver órfão (mtime mais velho que o TTL). */
+  private async isLockStale(): Promise<boolean> {
+    try {
+      const info = await stat(this.lockPath)
+      return Date.now() - info.mtimeMs > this.lockStaleMs
+    } catch {
+      // Lock removido entre o EEXIST e o stat (ou já assumido) — não é stale.
+      return false
     }
   }
 
