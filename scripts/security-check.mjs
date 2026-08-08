@@ -379,6 +379,25 @@ console.log('Estágio 1 — varredura estática (padrões proibidos)\n')
   )
 }
 
+// 24. Dependabot configurado (Rodada 7, hardening): o pinning por SHA (item 23)
+//    só é sustentável a longo prazo com atualização automática — o Dependabot
+//    do ecossistema github-actions atualiza o digest preservando o comentário
+//    de versão (`# v4`). Sem o arquivo, o pin estagna.
+{
+  const dependabot = join(ROOT, '.github', 'dependabot.yml')
+  let content = ''
+  try {
+    content = readFileSync(dependabot, 'utf8')
+  } catch {
+    /* arquivo ausente → checagem falha */
+  }
+  report(
+    'dependabot.yml com github-actions + npm (Rodada 7)',
+    content.includes('package-ecosystem: github-actions') &&
+      content.includes('package-ecosystem: npm'),
+  )
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // DINÂMICO — executa os testes que cobrem cada vetor
 // ────────────────────────────────────────────────────────────────────────────

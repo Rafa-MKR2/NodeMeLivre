@@ -1,0 +1,61 @@
+# Configuração do Dependabot — atualizações automáticas de dependências.
+#
+# Complemento do achado 29 (Rodada 7 da auditoria, docs/auditoria-seguranca.md):
+# as actions são pinadas por SHA (security:check item 23). O Dependabot do
+# ecossistema `github-actions` atualiza o digest e PRESERVA o comentário de
+# versão (`# v4`/`# v5`) — o pin nunca volta a ser tag móvel.
+#
+# Decisão de segurança: `insecure-external-code-execution` NÃO é habilitado
+# (a cadeia de supply chain foi endurecida na Rodada 7). Se um update do npm
+# exigir o postinstall do esbuild, o PR falhará e o flag pode ser avaliado
+# caso a caso — não por padrão.
+
+version: 2
+updates:
+  # GitHub Actions — mantém o pinning por SHA atualizado (digest novo com o
+  # comentário de versão preservado). Semanal: actions raramente precisam de
+  # bump diário.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - security
+    commit-message:
+      prefix: ci(deps)
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # npm — monorepo (workspaces). Os pacotes internos @nodemelivre/* são
+  # resolvidos localmente via workspaces e publicados no GitHub Packages
+  # (não no npmjs) — o Dependabot os ignora automaticamente; o `ignore`
+  # abaixo é defesa explícita contra ruído. Patch/minor agrupados num PR só.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    labels:
+      - dependencies
+    commit-message:
+      prefix: build(deps)
+    groups:
+      patch-minor:
+        update-types:
+          - patch
+          - minor
+    ignore:
+      # Internos: publicados no GitHub Packages e linkados via workspaces —
+      # o bump correto vem do próprio release, não do registry npmjs.
+      - dependency-name: "@nodemelivre/*"
