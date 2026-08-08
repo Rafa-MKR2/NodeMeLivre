@@ -62,6 +62,39 @@ describe('FileTokenStore', () => {
     expect(await store.get()).toBeNull()
   })
 
+  it('clear também remove o backup (.bak) — sem vazar segredo (O8)', async () => {
+    const filePath = join(dir, 'token.json')
+    const store = new FileTokenStore({ filePath })
+    await store.set(token({ accessToken: 'segredo' }))
+
+    await expect(stat(`${filePath}.bak`)).resolves.toBeDefined()
+    await store.clear()
+
+    await expect(stat(filePath)).rejects.toThrow()
+    await expect(stat(`${filePath}.bak`)).rejects.toThrow()
+  })
+
+  it('get() com principal corrompido serve o backup SEM reescrever o principal (O1)', async () => {
+    const filePath = join(dir, 'token.json')
+    const store = new FileTokenStore({ filePath })
+    await store.set(token({ accessToken: 'access-backup' }))
+
+    // Corrompe o arquivo principal; o backup continua íntegro.
+    const { writeFile } = await import('node:fs/promises')
+    await writeFile(filePath, 'corrompido {{')
+
+    const read = await store.get()
+    expect(read).toMatchObject({ accessToken: 'access-backup' })
+
+    // A leitura NÃO reescreve o principal (só a próxima escrita, sob lock, repara).
+    const after = await import('node:fs/promises')
+    expect(await after.readFile(filePath, 'utf8')).toBe('corrompido {{')
+
+    // A próxima escrita repara o arquivo (atômico, sob lock).
+    await store.set(token({ accessToken: 'access-novo' }))
+    expect((await store.get())?.accessToken).toBe('access-novo')
+  })
+
   it('deve retornar null para arquivo com conteúdo inválido', async () => {
     const store = new FileTokenStore({ filePath: join(dir, 'broken.json') })
     const { writeFile } = await import('node:fs/promises')

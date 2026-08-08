@@ -246,13 +246,33 @@ export class OAuthClient {
       code,
       redirect_uri: options.redirectUri,
     }
+    let verifier: string | undefined
     if (this.pkceEnabled) {
-      const verifier =
+      verifier =
         options.codeVerifier ??
         (options.state !== undefined ? this.getCodeVerifierFromState(options.state) : undefined)
       if (verifier !== undefined) body.code_verifier = verifier
     }
-    return this.tokenRequest(body)
+    try {
+      return await this.tokenRequest(body)
+    } catch (error) {
+      // O2 (Rodada 8): com PKCE desabilitado (padrão), apps novos do Mercado
+      // Livre (2025/2026) exigem `code_verifier` e o `/oauth/token` responde
+      // `invalid_request` — sem mensagem clara o integrador não sabe o que
+      // corrigir. Enriquecida a descrição apontando a configuração correta.
+      if (
+        !this.pkceEnabled &&
+        verifier === undefined &&
+        error instanceof OAuthError &&
+        error.oauthError === 'invalid_request'
+      ) {
+        throw new OAuthError(
+          error.oauthError,
+          `${error.errorDescription ?? 'A API rejeitou a troca do código'}. Sua aplicação pode exigir code_verifier (PKCE) — habilite \`pkce: true\` (o Mercado Livre exige o verifier para apps novos desde 2025/2026) ou informe \`codeVerifier\` explicitamente.`,
+        )
+      }
+      throw error
+    }
   }
 
   /** Renova o token usando o refresh_token. */

@@ -190,8 +190,10 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
         this.rateLimiter.update(rateLimitKey(method, request.path), response.headers)
       }
 
-      // Emit response event for all responses
-      this.emit('response', response, request)
+      // Emit response event for all responses. O4 (Rodada 8): emite um CLONE —
+      // um listener que leia o body da `Response` recebida não pode quebrar o
+      // parse do SDK (a original continua íntegra para `parseBody`).
+      this.emit('response', response.clone(), request)
 
       if (response.ok) {
         return (await parseBody(response, request.responseType)) as T

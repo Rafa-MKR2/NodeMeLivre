@@ -16,6 +16,17 @@ describe('Questions', () => {
     expect(call?.query).toEqual({ item_id: 'MLB1', status: 'UNANSWERED' })
   })
 
+  it('rejeita search com shape inválido antes de chamar a API (O6)', () => {
+    const transport = fakeTransport(() => ({ questions: [], total: 0 }))
+    const questions = new Questions(transport)
+
+    expect(() => questions.search({ status: 'BOGUS' as never })).toThrow(InputValidationError)
+    expect(() => questions.search({ offset: -1 })).toThrow(InputValidationError)
+    expect(() => questions.search({ limit: 0 })).toThrow(InputValidationError)
+    expect(() => questions.search({ seller_id: 'abc' as never })).toThrow(InputValidationError)
+    expect(transport.calls).toHaveLength(0)
+  })
+
   it('deve buscar uma pergunta pelo id', async () => {
     const transport = fakeTransport(() => question)
     await new Questions(transport).get(5)

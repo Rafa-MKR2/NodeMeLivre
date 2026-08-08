@@ -13,13 +13,10 @@ function createMockFetch() {
   const responses = new Map<string, unknown>()
   const createJsonResponse = (data: unknown, status = 200) => {
     const jsonStr = JSON.stringify(data)
-    return {
+    return new Response(jsonStr, {
       status,
-      ok: status >= 200 && status < 300,
-      text: async () => jsonStr,
-      json: async () => data,
-      headers: new Headers(),
-    } as Response
+      headers: { 'content-type': 'application/json' },
+    })
   }
   return {
     fetchImpl: async (input: string | URL | Request, init?: RequestInit) => {
@@ -62,9 +59,13 @@ function createMockFetch() {
       }
       throw new Error(`No mock for ${path}`)
     },
-    setResponse: (path: string, body: unknown, response: unknown) => {
+    setResponse: (path: string, body: unknown, response: Response | Record<string, unknown>) => {
       const key = `${path}:${JSON.stringify(body)}`
-      responses.set(key, response)
+      if (response instanceof Response) {
+        responses.set(key, response)
+      } else {
+        responses.set(key, createJsonResponse(response))
+      }
     },
   }
 }
@@ -88,27 +89,13 @@ describe('Integração Multi-Instância - Fase 1', () => {
         redirect_uri: 'https://app.com/callback',
       },
       {
-        status: 200,
-        ok: true,
-        text: async () =>
-          JSON.stringify({
-            access_token: 'access-initial',
-            token_type: 'bearer',
-            expires_in: 21600,
-            scope: 'offline_access read write',
-            user_id: 12345,
-            refresh_token: 'refresh-initial',
-          }),
-        json: async () => ({
-          access_token: 'access-initial',
-          token_type: 'bearer',
-          expires_in: 21600,
-          scope: 'offline_access read write',
-          user_id: 12345,
-          refresh_token: 'refresh-initial',
-        }),
-        headers: new Headers(),
-      } as Response,
+        access_token: 'access-initial',
+        token_type: 'bearer',
+        expires_in: 21600,
+        scope: 'offline_access read write',
+        user_id: 12345,
+        refresh_token: 'refresh-initial',
+      },
     )
   })
 

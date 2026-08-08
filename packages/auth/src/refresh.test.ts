@@ -114,4 +114,37 @@ describe('TokenManager', () => {
     await manager.clear()
     expect(await store.get()).toBeNull()
   })
+
+  it('waitForLeaseRelease usa o clock injetado e sai quando o token é atualizado (O7)', async () => {
+    vi.useFakeTimers()
+    try {
+      // Relógio controlável compartilhado entre store e manager.
+      let now = NOW
+      const store = new InMemoryTokenStore({ clock: () => now })
+      const oauth = fakeOAuth()
+      const manager = new TokenManager({ oauth, store, clock: () => now })
+      await store.set(storedToken({ expiresAt: now - 1000 }))
+
+      // Outra instância segura o lease e atualiza o token durante a espera.
+      await store.acquireLease({ holderId: 'outra-instancia' })
+
+      const refreshPromise = manager.refresh()
+      // Espera o loop do waitForLeaseRelease entrar (startWait = now).
+      await vi.advanceTimersByTimeAsync(0)
+
+      // A outra instância conclui o refresh: avança o relógio e grava o token.
+      now += 2000
+      await store.set(storedToken({ accessToken: 'access-2', refreshToken: 'refresh-2' }))
+
+      // O ciclo de 500ms do loop percebe updatedAt > startWait e retorna.
+      await vi.advanceTimersByTimeAsync(600)
+      await refreshPromise
+
+      // Esta instância NÃO renovou — o token veio da outra instância.
+      expect(oauth.refresh).not.toHaveBeenCalled()
+      expect((await manager.current())?.accessToken).toBe('access-2')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

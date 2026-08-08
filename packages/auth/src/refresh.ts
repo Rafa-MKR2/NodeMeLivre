@@ -167,9 +167,12 @@ export class TokenManager extends EventEmitter<TokenManagerEvents> implements To
   }
 
   private async waitForLeaseRelease(leaseExpiresAt: number): Promise<void> {
+    // O7 (Rodada 8): usa o clock injetado do TokenManager (e não Date.now) —
+    // em testes com clock fake, o loop reagiria ao relógio avançado e não
+    // divergiria do `expiresAt` calculado pelo store (que também usa clock).
     const maxWaitMs = 60_000 // máximo 60s
-    const startWait = Date.now()
-    while (Date.now() < leaseExpiresAt && Date.now() - startWait < maxWaitMs) {
+    const startWait = this.clock()
+    while (this.clock() < leaseExpiresAt && this.clock() - startWait < maxWaitMs) {
       await new Promise((r) => setTimeout(r, 500))
       // Verifica se lease ainda existe
       const versioned = await this.store.getWithVersion()

@@ -77,10 +77,21 @@ export interface TokenStore {
   releaseLease(holderId: string): Promise<void>
 }
 
+/** Opções do store em memória. */
+export interface InMemoryTokenStoreOptions {
+  /** Clock injetável — usado no `updatedAt` e no lease (padrão: `Date.now`). */
+  clock?: () => number
+}
+
 /** Armazena o token só em memória — some quando o processo reinicia. */
 export class InMemoryTokenStore implements TokenStore {
+  private readonly clock: () => number
   private token: VersionedToken | null = null
   private leaseHolder: { holderId: string; expiresAt: number } | null = null
+
+  constructor(options: InMemoryTokenStoreOptions = {}) {
+    this.clock = options.clock ?? Date.now
+  }
 
   async get(): Promise<AccessToken | null> {
     return this.token?.token ?? null
@@ -121,7 +132,7 @@ export class InMemoryTokenStore implements TokenStore {
   }
 
   async acquireLease(options: TokenLeaseOptions): Promise<LeaseResult> {
-    const now = Date.now()
+    const now = this.clock()
     const ttlMs = options.ttlMs ?? 30_000
     const expiresAt = now + ttlMs
 
@@ -147,7 +158,7 @@ export class InMemoryTokenStore implements TokenStore {
   }
 
   async renewLease(holderId: string, ttlMs: number): Promise<boolean> {
-    const now = Date.now()
+    const now = this.clock()
     if (
       this.leaseHolder &&
       this.leaseHolder.holderId === holderId &&
@@ -170,7 +181,7 @@ export class InMemoryTokenStore implements TokenStore {
     return {
       token,
       version,
-      updatedAt: Date.now(),
+      updatedAt: this.clock(),
       checksum: createHash('sha256').update(json).digest('hex'),
     }
   }
@@ -183,6 +194,8 @@ export interface FileTokenStoreOptions {
   lockStaleMs?: number
   /** Tempo máximo esperando por um lock ocupado. Padrão: 15s. */
   lockTimeoutMs?: number
+  /** Clock injetável — usado no `updatedAt` e no lease (padrão: `Date.now`). */
+  clock?: () => number
 }
 
 /**
@@ -191,17 +204,21 @@ export interface FileTokenStoreOptions {
  */
 export class FileTokenStore implements TokenStore {
   private readonly filePath: string
+  private readonly backupPath: string
   private readonly lockPath: string
   private readonly leasePath: string
   private readonly lockStaleMs: number
   private readonly lockTimeoutMs: number
+  private readonly clock: () => number
 
   constructor(options: FileTokenStoreOptions = {}) {
     this.filePath = options.filePath ?? defaultTokenFilePath()
+    this.backupPath = `${this.filePath}.bak`
     this.lockPath = `${this.filePath}.lock`
     this.leasePath = `${this.filePath}.lease`
     this.lockStaleMs = options.lockStaleMs ?? LOCK_STALE_MS
     this.lockTimeoutMs = options.lockTimeoutMs ?? LOCK_ACQUIRE_TIMEOUT_MS
+    this.clock = options.clock ?? Date.now
   }
 
   async get(): Promise<AccessToken | null> {
@@ -277,6 +294,7 @@ export class FileTokenStore implements TokenStore {
     const lock = await this.acquireLock()
     try {
       await rm(this.filePath, { force: true })
+      await rm(this.backupPath, { force: true })
       await rm(this.leasePath, { force: true })
     } finally {
       await this.releaseLock(lock)
@@ -286,7 +304,7 @@ export class FileTokenStore implements TokenStore {
   async acquireLease(options: TokenLeaseOptions): Promise<LeaseResult> {
     const lock = await this.acquireLock()
     try {
-      const now = Date.now()
+      const now = this.clock()
       const ttlMs = options.ttlMs ?? 30_000
       const expiresAt = now + ttlMs
 
@@ -333,7 +351,7 @@ export class FileTokenStore implements TokenStore {
   async renewLease(holderId: string, ttlMs: number): Promise<boolean> {
     const lock = await this.acquireLock()
     try {
-      const now = Date.now()
+      const now = this.clock()
       let currentLease: { holderId: string; expiresAt: number } | null = null
       try {
         const leaseRaw = await readFile(this.leasePath, 'utf8')
@@ -466,22 +484,24 @@ export class FileTokenStore implements TokenStore {
     // Atomic rename (POSIX e Windows)
     await import('node:fs/promises').then((fs) => fs.rename(tempPath, this.filePath))
     // Cria backup para recuperação de corrupção
-    const backupPath = `${this.filePath}.bak`
-    await writeFile(backupPath, json, { encoding: 'utf8', mode: 0o600 })
+    await writeFile(this.backupPath, json, { encoding: 'utf8', mode: 0o600 })
   }
 
-  /** Tenta ler backup em caso de corrupção. */
+  /**
+   * Tenta ler backup em caso de corrupção.
+   *
+   * O1 (Rodada 8): o restore do arquivo principal é feito APENAS sob lock na
+   * próxima escrita — esta leitura é lock-free e NUNCA reescreve o arquivo.
+   * Reescrever aqui criaria uma corrida com uma escrita concorrente (que tem
+   * o lock), podendo regredir um token recém-gravado para o estado antigo do
+   * backup. Sem o restore, leituras seguintes continuam servindo o backup até
+   * a próxima escrita reparar o arquivo (as escritas sobrescrevem com atômico).
+   */
   private async readBackup(): Promise<VersionedToken | null> {
-    const backupPath = `${this.filePath}.bak`
     try {
-      const raw = await readFile(backupPath, 'utf8')
+      const raw = await readFile(this.backupPath, 'utf8')
       const parsed = this.parseVersionedToken(raw)
       if (parsed && this.verifyChecksum(parsed)) {
-        // Restaura arquivo principal
-        await writeFile(this.filePath, JSON.stringify(parsed, null, 2), {
-          encoding: 'utf8',
-          mode: 0o600,
-        })
         return parsed
       }
     } catch {
@@ -495,7 +515,7 @@ export class FileTokenStore implements TokenStore {
     return {
       token,
       version,
-      updatedAt: Date.now(),
+      updatedAt: this.clock(),
       checksum: createHash('sha256').update(json).digest('hex'),
     }
   }

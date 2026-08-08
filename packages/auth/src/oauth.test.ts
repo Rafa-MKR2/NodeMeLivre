@@ -332,6 +332,55 @@ describe('OAuthClient PKCE (RFC 7636)', () => {
     expect(err.oauthError).toBe('invalid_request')
     expect(err.message).toContain('required: grant_type')
   })
+
+  it('invalid_request sem PKCE habilitado ganha dica de code_verifier (O2)', async () => {
+    mockFetch(() =>
+      json(
+        {
+          error: 'invalid_request',
+          error_description: 'code_verifier is required',
+        },
+        400,
+      ),
+    )
+
+    const err = await client()
+      .exchangeCode('code-1', { redirectUri: 'https://app.com/callback', state: 's1' })
+      .catch((e) => e)
+    expect(err).toBeInstanceOf(OAuthError)
+    expect(err.oauthError).toBe('invalid_request')
+    // Dica enriquecida apontando para PKCE (apps novos exigem o verifier).
+    expect(err.message).toContain('code_verifier')
+    expect(err.message).toContain('pkce: true')
+  })
+
+  it('com PKCE habilitado e verifier presente, não adiciona dica redundante (O2)', async () => {
+    mockFetch(() =>
+      json(
+        {
+          error: 'invalid_request',
+          error_description: 'code_verifier is required',
+        },
+        400,
+      ),
+    )
+
+    const err = await new OAuthClient({
+      clientId: 'APP_ID',
+      clientSecret: 'SECRET',
+      pkce: true,
+    })
+      .exchangeCode('code-1', {
+        redirectUri: 'https://app.com/callback',
+        state: 's1',
+        codeVerifier: 'abc',
+      })
+      .catch((e) => e)
+    expect(err).toBeInstanceOf(OAuthError)
+    expect(err.oauthError).toBe('invalid_request')
+    // Não é o cenário "verifier ausente": mantém a descrição original.
+    expect(err.message).toBe('code_verifier is required')
+  })
 })
 
 describe('OAuthClient.getAppToken', () => {

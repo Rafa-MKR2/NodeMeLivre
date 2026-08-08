@@ -18,7 +18,7 @@ Auditoria de segurança complementar ao [DOCUMENTO_CORRECOES.md](../DOCUMENTO_CO
 
 Em **sete rodadas** (auditoria inicial + re-auditoria exaustiva com execução real de experimentos e revisão independente + verificação adicional com revisor independente + auditoria focada em OAuth/PKCE/timing/concorrência + auditoria focada em DoS/erros/payloads + auditoria cega independente com confirmação por execução + auditoria de supply chain/CI), foram identificados **29 achados** (1 média-alta, 8 médias, 3 baixa-média, 17 baixos). **27 correções foram implementadas**, 1 item documentado (eventos) e 1 mitigado (temp previsível do `FileTokenStore`). O estado atual é **verde**: 325 testes, lint, typecheck, build e `npm run security:check` (33/33) passando.
 
-Em **Rodada 8** (análise fria independente, com confirmação de cada vetor por execução real), foram identificados **4 achados novos** (1 média-alta, 2 médias, 1 baixa-média) + **9 observações baixas**. O destaque é o **ACHADO 30: um bypass do fix do ACHADO 19** — o origin guard do `buildUrl` é contornável por whitespace/C0 leading, exfiltrando o `Authorization` para outro origin. Esse é o único achado da Rodada 8 com impacto de segurança real e, por ser uma **regressão de um vetor já corrigido**, tem prioridade máxima. **Os achados 30-33 foram corrigidos e cobertos por testes**: o origin guard agora valida o **resultado** do parse (não o input); o PKCE sobrevive ao `consumeState`; o lock do `FileTokenStore` tem recuperação de stale + timeout; e o `DeduplicatingLogger` nunca lança com contexto circular. O `security:check` migrou a checagem do origin guard (e demais) para execução real dos payloads.
+Em **Rodada 8** (análise fria independente, com confirmação de cada vetor por execução real), foram identificados **4 achados novos** (1 média-alta, 2 médias, 1 baixa-média) + **9 observações baixas**. O destaque é o **ACHADO 30: um bypass do fix do ACHADO 19** — o origin guard do `buildUrl` é contornável por whitespace/C0 leading, exfiltrando o `Authorization` para outro origin. Esse é o único achado da Rodada 8 com impacto de segurança real e, por ser uma **regressão de um vetor já corrigido**, tem prioridade máxima. **Os achados 30-33 foram corrigidos e cobertos por testes**: o origin guard agora valida o **resultado** do parse (não o input); o PKCE sobrevive ao `consumeState`; o lock do `FileTokenStore` tem recuperação de stale + timeout; e o `DeduplicatingLogger` nunca lança com contexto circular. **As 9 observações O1-O9 foram eliminadas**: `readBackup` read-only, PKCE hint, rate-limit reset implausível ignorado, response clone, schemas de validação em questions/messages, clock injetado no lease wait, limpeza do `.bak`, `__proto__` em teste via `Object.fromEntries`. O `security:check` migrou a checagem do origin guard (e demais) para execução real dos payloads.
 
 **Veredito:** o SDK estava **acima da média** em higiene (CSPRNG para state, token em arquivo com `0o600`, sem segredos em logs, rate-limit por recurso não-fragmentado). Os vetores com impacto real das rodadas 1-8 — path traversal via normalização de URL, bypass de SSRF por trailing dot, perda de token na re-autenticação e o bypass do origin guard por whitespace/C0 — foram corrigidos e cobertos por testes. A Rodada 8 expôs que o `security:check` validava por presença de string em vez de semântica (deixando o bypass passar no CI); a checagem do origin guard agora executa os payloads maliciosos de verdade.
 
@@ -99,19 +99,19 @@ Em **Rodada 8** (análise fria independente, com confirmação de cada vetor por
 | 32 | **`.lock` stale do `FileTokenStore` = deadlock permanente** — `acquireLock` girava `while(true)` em `EEXIST` sem timeout nem detecção de stale; um crash (SIGKILL/OOM/deploy) travava TODAS as operações de token para sempre (o lease tem TTL, o lock não) | 🟡 Média | ✅ Corrigido | `token.ts` — `acquireLock` assume locks com mtime > TTL (mesma política do lease) e estoura timeout `OAuthError` em `lockTimeoutMs` (opções injetáveis); testes de stale e timeout |
 | 33 | **`DeduplicatingLogger.makeKey` estoura com contexto circular** — `JSON.stringify(context)` lança `TypeError` dentro de catch handlers do `HttpClient`/`TokenManager` (que logam `{ err }`), substituindo o erro original | 🟡 Baixa-Média | ✅ Corrigido | `logger.ts` — `safeStringify` com `WeakSet` de objetos visitados (+ fallback `[unserializable]`); teste com cadeia de `cause` circular |
 
-**Observações baixas (Rodada 8, sem correção pendente):**
+**Observações baixas (Rodada 8 — todas corrigidas):**
 
-| # | Observação | Onde |
-|---|------------|------|
-| O1 | `readBackup()` reescreve o arquivo principal **sem lock** — corrida com escrita concorrente pode regredir o token | `token.ts` |
-| O2 | PKCE **desabilitado por padrão** (`pkce: false`) — apps novos (2025/2026, ML exige verifier) quebram com `invalid_request` sem mensagem clara | `oauth.ts` |
-| O3 | Heurística do `parseResetAt`: valor ≤ 1e9 é tratado como "segundos restantes" — mudança de formato do ML pode causar espera de 5 min à toa | `rate-limit.ts` |
-| O4 | Evento `response` emite a `Response` **não-consumida** — listener que ler o body quebra o parse do SDK | `client.ts` |
-| O5 | `security:check` valida por **presença de substring**, não semântica — o ACHADO 30 passou por isso; **parcialmente mitigado**: a checagem do origin guard agora executa os payloads maliciosos de verdade (`client.test.ts` no dinâmico) | `security-check.mjs` |
-| O6 | `questions.search` e `messages.send` (estrutura `from`/`to`) sem validação de shape — payload malformado vai à API | `questions.ts` / `messages.ts` |
-| O7 | `waitForLeaseRelease` usa `updatedAt` do store (`Date.now()`) e não o clock injetado do `TokenManager` — divergência em testes com clock fake | `refresh.ts` |
-| O8 | `FileTokenStore.clear()` deixa o `.bak` órfão | `token.ts` |
-| O9 | Lint: warning `__proto__` em `resilience.test.ts` (aceitável; idealmente supressão documentada) | `resilience.test.ts` |
+| # | Observação | Onde | Status |
+|---|------------|------|--------|
+| O1 | `readBackup()` reescrevia o arquivo principal **sem lock** — corrida com escrita concorrente podia regredir o token | `token.ts` | ✅ Corrigido (read-only; reparo na próxima escrita sob lock) |
+| O2 | PKCE **desabilitado por padrão** — apps novos (2025/2026, ML exige verifier) quebravam com `invalid_request` sem mensagem clara | `oauth.ts` | ✅ Corrigido (erro enriquecido com dica `pkce: true` ou `codeVerifier` explícito) |
+| O3 | Heurística do `parseResetAt`: valor ≤ 1e9 tratado como "segundos restantes" — mudança de formato do ML podia causar espera de 5 min à toa | `rate-limit.ts` | ✅ Corrigido (relativo implausível > 5 min → `undefined`, sem espera) |
+| O4 | Evento `response` emitia a `Response` **não-consumida** — listener que lê o body quebrava o parse do SDK | `client.ts` | ✅ Corrigido (emite `response.clone()`) |
+| O5 | `security:check` validava por **presença de substring**, não semântica — o ACHADO 30 passou por isso | `security-check.mjs` | ⚠️ Parcialmente mitigado (checagem dinâmica dos payloads + semântica no origin guard) |
+| O6 | `questions.search` e `messages.send` sem validação de shape — payload malformado ia à API | `questions.ts` / `messages.ts` | ✅ Corrigido (schemas `questionSearchSchema`, `messageSendSchema` aplicados antes do fetch) |
+| O7 | `waitForLeaseRelease` usava `updatedAt` do store (`Date.now()`) e não o clock injetado do `TokenManager` — divergência em testes com clock fake | `refresh.ts` | ✅ Corrigido (usa `this.clock()` injetado) |
+| O8 | `FileTokenStore.clear()` deixava o `.bak` órfão | `token.ts` | ✅ Corrigido (remove `.bak` junto com o principal) |
+| O9 | Lint: warning `__proto__` em `resilience.test.ts` | `resilience.test.ts` | ✅ Corrigido (`Object.fromEntries` em vez de acesso literal) |
 
 ---
 
@@ -831,7 +831,7 @@ Para impedir regressão dos vetores corrigidos, o monorepo tem `npm run security
 | 🟡 Média | SSRF trailing dot (10), Log injection webhooks (6), Re-auth perde token (13), `deepOmitEmpty` stack overflow (16), `paginate` loop infinito (17), `RateLimiter` espera gigante (18), Origin escape no `buildUrl` (19), DNS wildcard (20), PKCE consumeState (31), `.lock` stale deadlock (32) | ✅ Corrigido |
 | 🟡 Baixa-Média | SSRF no schema (2), Redirects (3), IPv6 transition (21), `DeduplicatingLogger` circular (33) | ✅ Corrigido |
 | 🟢 Baixa | `reply` NaN (4), Eventos (5), Prototype (7), API IDs (8), temp previsível (9), `ApiError.message` (11), NEL/DEL (12), instanceId previsível (14), code_verifier leak (15), Authorization cross-origin (22), `parallel` `__proto__` (23), permissões lease/lock (24), CI sem permissions (25), sem timeout (26), sem npm audit (27), deps com `"*"` (28), actions por tag móvel (29) | ✅ Corrigido / 📚 Documentado |
-| 🟢 Baixa | Observações O1–O9 (Rodada 8) | 📚 Registrado |
+| 🟢 Baixa | Observações O1–O9 (Rodada 8) | ✅ Corrigido |
 
 ---
 
@@ -846,4 +846,4 @@ Para impedir regressão dos vetores corrigidos, o monorepo tem `npm run security
 
 ---
 
-*Auditoria baseada em leitura dos 14 pacotes (src + testes), execução real de experimentos para confirmação dos vetores (URL parser na Rodada 3; refresh/re-auth/PKCE na Rodada 4; deepOmitEmpty/paginate/rate-limit na Rodada 5; buildUrl/redirect/DNS/IPv6/parallel/permissões na Rodada 6 — auditada por analista independente; lockfile/npm audit/workflows na Rodada 7; origin guard/whitespace+C0, PKCE consumeState, lock stale e logger circular na Rodada 8), e validação final com 330 testes, lint, typecheck, build e `npm run security:check` (36/36) verdes (Rodadas 1–2 no commit `3ae58fb`; Rodada 3 no commit `2aa5ed0`; Rodada 4 no commit `506d6c8`; Rodadas 5-6 no commit `976e710`; Rodada 7 no commit `44562d4`; Rodada 8 — correção dos achados 30-33 e migração do `security:check` para execução real dos payloads).*
+*Auditoria baseada em leitura dos 14 pacotes (src + testes), execução real de experimentos para confirmação dos vetores (URL parser na Rodada 3; refresh/re-auth/PKCE na Rodada 4; deepOmitEmpty/paginate/rate-limit na Rodada 5; buildUrl/redirect/DNS/IPv6/parallel/permissões na Rodada 6 — auditada por analista independente; lockfile/npm audit/workflows na Rodada 7; origin guard/whitespace+C0, PKCE consumeState, lock stale e logger circular na Rodada 8), e validação final com **339 testes**, lint, typecheck, build e `npm run security:check` (**36/36**) verdes (Rodadas 1–2 no commit `3ae58fb`; Rodada 3 no commit `2aa5ed0`; Rodada 4 no commit `506d6c8`; Rodadas 5-6 no commit `976e710`; Rodada 7 no commit `44562d4`; Rodada 8 — correção dos achados 30-33 e observações O1-O9 no commit `HEAD`).*

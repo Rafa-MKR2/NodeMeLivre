@@ -419,4 +419,23 @@ describe('HttpClient — redirecionamentos seguros', () => {
     // 1 inicial + 5 hops máximos
     expect(spy).toHaveBeenCalledTimes(6)
   })
+
+  it('emite evento response com clone — listener pode consumir body sem quebrar o SDK (O4)', async () => {
+    let emittedResponse: Response | null = null
+    mockFetch(() => json({ data: 'ok' }))
+
+    const http = client()
+    http.on('response', (res) => {
+      emittedResponse = res
+    })
+
+    const result = await http.get<{ data: string }>('/test')
+    expect(result.data).toBe('ok')
+
+    // O listener recebeu um clone — o body do original ainda pode ser lido pelo SDK.
+    expect(emittedResponse).toBeInstanceOf(Response)
+    // Clone ainda tem o body legível.
+    const text = await (emittedResponse as unknown as Response).text()
+    expect(text).toContain('"data":"ok"')
+  })
 })

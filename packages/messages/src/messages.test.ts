@@ -135,4 +135,37 @@ describe('Messages', () => {
     })
     expect(transport.calls).toHaveLength(1)
   })
+
+  it('deve rejeitar shape inválido do payload antes de chamar a API (O6)', async () => {
+    const transport = fakeTransport(() => message)
+    const messages = new Messages(transport)
+
+    // user_id como string (inválido) — schema exige number
+    await expect(
+      messages.send({
+        from: { user_id: 123 },
+        to: { user_id: 'x' as unknown as number, resource: 'orders/1' },
+        text: 'oi',
+      }),
+    ).rejects.toThrow(InputValidationError)
+
+    // resource vazio (inválido) — schema exige minLength 1
+    await expect(
+      messages.send({
+        from: { user_id: 123 },
+        to: { user_id: 456, resource: '' },
+        text: 'oi',
+      }),
+    ).rejects.toThrow(InputValidationError)
+
+    // from.user_id como string (inválido)
+    await expect(
+      messages.send({
+        from: { user_id: 'a' as unknown as number },
+        to: { user_id: 456, resource: 'r' },
+        text: 'oi',
+      }),
+    ).rejects.toThrow(InputValidationError)
+    expect(transport.calls).toHaveLength(0)
+  })
 })

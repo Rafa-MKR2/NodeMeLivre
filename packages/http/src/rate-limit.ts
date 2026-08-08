@@ -43,13 +43,18 @@ function parsePositive(raw: string | null): number | undefined {
  * três formatos:
  * - valor > 1e12 → epoch em ms.
  * - valor > 1e9 → epoch em segundos.
- * - valor <= 1e9 → segundos restantes (relativo a `now`).
+ * - valor <= 1e9 → segundos restantes (relativo a `now`), apenas se a espera
+ *   for plausível (≤ `MAX_WAIT_MS`). Um valor relativo gigante indica mudança
+ *   de formato ou header corrompido (O3, Rodada 8) — nesse caso descartamos o
+ *   reset em vez de arriscar um sono de 5 min à toa: o retry 429 com backoff
+ *   cobre o cenário sem bloquear a requisição.
  */
 function parseResetAt(raw: string | null, now: number = Date.now()): number | undefined {
   const value = parsePositive(raw)
   if (value === undefined) return undefined
   if (value > 1e12) return value
   if (value > 1e9) return value * 1000
+  if (value * 1000 > MAX_WAIT_MS) return undefined
   return now + value * 1000
 }
 

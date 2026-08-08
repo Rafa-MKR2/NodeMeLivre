@@ -183,6 +183,21 @@ describe('RateLimiter', () => {
 
     expect(limiter.stateOf('/items/MLB1')).toBeUndefined()
   })
+
+  it('reset relativo implausível (>5 min) é ignorado — não bloqueia (O3)', async () => {
+    // 500s * 1000 = 500_000ms > MAX_WAIT_MS (300_000ms) → parseResetAt retorna undefined
+    const limiter = new RateLimiter()
+    limiter.update(
+      '/items/MLB1',
+      headers({
+        'x-rate-limit-remaining': '0',
+        'x-rate-limit-reset': '500', // segundos relativos
+      }),
+    )
+
+    // resetAt não é definido → waitIfNeeded resolve imediatamente
+    await expect(limiter.waitIfNeeded('/items/MLB1')).resolves.toBeUndefined()
+  })
 })
 
 describe('rateLimitKey', () => {

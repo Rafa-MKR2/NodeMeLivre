@@ -42,9 +42,12 @@ describe('parallel', () => {
 
   it('não polui o resultado com chave __proto__ (anti prototype pollution)', async () => {
     // Operações montadas de JSON.parse podem ter `__proto__` como chave própria.
-    const ops: Record<string, () => Promise<unknown>> = Object.create(null)
-    ops['__proto__'] = async () => ({ injected: true })
-    ops['legit'] = async () => 'ok'
+    // Object.fromEntries cria a chave como data property (sem disparar o setter
+    // de protótipo) — evita o acesso literal `ops['__proto__']` no teste.
+    const ops: Record<string, () => Promise<unknown>> = Object.fromEntries([
+      ['__proto__', async () => ({ injected: true })],
+      ['legit', async () => 'ok'],
+    ])
 
     const result = await parallel(ops)
     const data = result.data as unknown as Record<string, unknown>

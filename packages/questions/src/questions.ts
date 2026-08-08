@@ -1,10 +1,17 @@
 import {
+  assertValid,
   assertValidId,
+  enumOf,
+  number,
+  object,
+  optional,
   type PageFetcher,
   paginate,
   paginationOptions,
   type ResourceTransport,
+  string,
   toQuery,
+  type ValidationSchema,
 } from '@nodemelivre/core'
 import { InputValidationError } from '@nodemelivre/errors'
 import type {
@@ -15,12 +22,34 @@ import type {
   QuestionSearchResponse,
 } from '@nodemelivre/types'
 
+const QUESTION_STATUSES = [
+  'UNANSWERED',
+  'ANSWERED',
+  'ANSWERED_LATE',
+  'CLOSED',
+  'UNDER_REVIEW',
+  'HOLD',
+] as const
+
+/** Parâmetros de busca — falha rápido antes de chamar a API (O6, Rodada 8). */
+const questionSearchSchema: ValidationSchema<QuestionSearchParams> = object<QuestionSearchParams>({
+  item_id: optional(string()),
+  seller_id: optional(number()),
+  status: optional(enumOf(QUESTION_STATUSES)),
+  api_version: optional(number()),
+  from: optional(string()),
+  to: optional(string()),
+  offset: optional(number({ integer: true, min: 0 })),
+  limit: optional(number({ integer: true, positive: true })),
+})
+
 /** Recursos de perguntas e respostas. */
 export class Questions {
   constructor(private readonly transport: ResourceTransport) {}
 
   /** Busca de perguntas por item ou vendedor. */
   search(params: QuestionSearchParams = {}): Promise<QuestionSearchResponse> {
+    assertValid(questionSearchSchema, params)
     return this.transport.get('/questions/search', { query: toQuery(params) })
   }
 
@@ -41,6 +70,7 @@ export class Questions {
     params: QuestionSearchParams = {},
     signal?: AbortSignal,
   ): AsyncGenerator<Question, void, void> {
+    assertValid(questionSearchSchema, params)
     // A resposta de /questions/search usa `questions` (não `results`); o
     // adaptador abaixo normaliza para o formato do `paginate()`.
     const fetchPage: PageFetcher<Question> = async (offset, limit, pageSignal) => {

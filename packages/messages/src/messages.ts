@@ -2,12 +2,16 @@ import {
   assertValid,
   assertValidId,
   makeSchema,
+  number,
+  object,
+  optional,
   type QueryParams,
   type ResourceTransport,
+  string,
   toQuery,
   type ValidationSchema,
 } from '@nodemelivre/core'
-import type { Message, MessageSendInput, MessageUser } from '@nodemelivre/types'
+import type { Message, MessageRecipient, MessageSendInput, MessageUser } from '@nodemelivre/types'
 
 /** Parâmetros da listagem de mensagens de um pack. */
 export interface MessagesListParams {
@@ -27,6 +31,25 @@ const messageTextSchema: ValidationSchema<string> = makeSchema((value) => {
     ]
   }
   return []
+})
+
+const messageUserSchema: ValidationSchema<MessageUser> = object<MessageUser>({
+  user_id: number(),
+  id: optional(number()),
+})
+
+const messageRecipientSchema: ValidationSchema<MessageRecipient> = object<MessageRecipient>({
+  user_id: number(),
+  resource: string({ minLength: 1 }),
+  site_id: optional(string()),
+  email: optional(string()),
+})
+
+/** Payload de envio — falha rápido antes de chamar a API (O6, Rodada 8). */
+const messageSendSchema: ValidationSchema<MessageSendInput> = object<MessageSendInput>({
+  from: messageUserSchema,
+  to: messageRecipientSchema,
+  text: messageTextSchema,
 })
 
 /**
@@ -93,7 +116,7 @@ export class Messages {
 
   /** Envia uma mensagem ao comprador. Máximo de 350 caracteres. */
   async send(input: MessageSendInput): Promise<Message> {
-    assertValid(messageTextSchema, input.text)
+    assertValid(messageSendSchema, input)
     return this.transport.post('/messages', input, { query: { tag: 'post_sale' } })
   }
 }
