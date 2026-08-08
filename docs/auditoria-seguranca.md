@@ -16,13 +16,15 @@ Auditoria de segurança complementar ao [DOCUMENTO_CORRECOES.md](../DOCUMENTO_CO
 - **Exposição de segredos** (logs, eventos)
 - Higiene: permissões de arquivo, CSPRNG, CI, segredos no repo
 
-Foram identificados **5 achados** (1 média-alta, 2 baixa-média, 2 baixos). **4 correções de segurança foram implementadas** (path traversal, SSRF no schema de URL, redirects não autorizados e `question_id` numérico) e 1 item foi documentado como recomendação. O estado atual é **verde**: 307 testes, lint, typecheck e build passando.
+Em **três rodadas** (auditoria inicial + re-auditoria exaustiva com execução real de experimentos e revisão independente + verificação adicional com revisor independente), foram identificados **12 achados** (1 média-alta, 2 médias, 4 baixa-média, 5 baixos). **11 correções foram implementadas** (path traversal, SSRF no schema de URL + bypass por trailing dot, redirects não autorizados, `question_id` numérico, log injection nos webhooks e no `ApiError.message`, prototype pollution local no core e IDs da API sem validação) e 1 item documentado/mitigado. O estado atual é **verde**: 313 testes, lint, typecheck e build passando.
 
 **Veredito:** o SDK estava **acima da média** em higiene (CSPRNG para state, token em arquivo com `0o600`, sem segredos em logs, rate-limit por recurso não-fragmentado). O único vetor com impacto real — path traversal via normalização de URL — foi corrigido e coberto por testes.
 
 ---
 
 ## ✅ Status de Resolução (2026-08-08)
+
+### Rodada 1 — auditoria inicial
 
 | # | Achado | Severidade | Status | Onde |
 |---|--------|------------|--------|------|
@@ -31,6 +33,23 @@ Foram identificados **5 achados** (1 média-alta, 2 baixa-média, 2 baixos). **4
 | 3 | Redirects seguidos cegamente (token em risco) | 🟡 Baixa-Média | ✅ Corrigido | `HttpClient` com `redirect: 'manual'` + validação |
 | 4 | `Questions.reply` enviaria `question_id: null` | 🟢 Baixa | ✅ Corrigido | validação numérica em `reply` |
 | 5 | Eventos expõem `headers`/`body` ao integrador | 🟢 Baixa | 📚 Documentado | nota de segurança no README |
+
+### Rodada 2 — re-auditoria (verificação exaustiva)
+
+| # | Achado | Severidade | Status | Onde |
+|---|--------|------------|--------|------|
+| 6 | Log injection via `WebhookError` (CRLF em `topic`/`application_id`/`user_id`) | 🟡 Média | ✅ Corrigido | `sanitizeLog()` em `webhooks.ts` |
+| 7 | Prototype pollution local em `deepOmitEmpty`/`omitEmpty`/`omitUndefined`/`toQuery` (`__proto__` aciona setter) | 🟢 Baixa | ✅ Corrigido | chaves perigosas ignoradas no core |
+| 8 | `resolveSellerItems` interpola IDs da API sem validação | 🟢 Baixa | ✅ Corrigido | `assertValidId` defesa-em-profundidade |
+| 9 | `FileTokenStore` temp path previsível (symlink race) | 🟢 Baixa | ✅ Mitigado | escrita temp+rename já protege o alvo; risco exige acesso local prévio |
+
+### Rodada 3 — verificação com revisor independente
+
+| # | Achado | Severidade | Status | Onde |
+|---|--------|------------|--------|------|
+| 10 | Bypass de SSRF por **trailing dot** (`localhost.`, `metadata.` — FQDN absoluto que resolve para loopback) | 🟡 Média | ✅ Corrigido | `httpUrlSchema` normaliza hostname (`trailing dot` removido) |
+| 11 | `ApiError.message` interpola a `message` da API sem sanitização (log injection em logs/APM) | 🟢 Baixa | ✅ Corrigido | `errorMessageFor` sanitiza control chars |
+| 12 | `sanitizeLog` não cobria NEL (`\u0085`) e DEL (`\x7f`) | 🟢 Baixa | ✅ Corrigido | regex ampliado no webhooks |
 
 ---
 
@@ -167,6 +186,129 @@ Documentado no README: ao usar eventos, evite logar o objeto `headers`/`body` co
 
 ---
 
+## 🟡 ACHADO 6 — Log injection via `WebhookError` (Rodada 2)
+
+### Localização
+```
+packages/webhooks/src/webhooks.ts — parse() e verify()/verifyForUser()
+```
+
+### Descrição do Problema
+O payload do webhook é um **POST público** (qualquer um pode enviar). Os campos `topic`, `application_id` e `user_id` são atacante-controlados e eram interpolados **sem sanitização** em mensagens de `WebhookError`:
+
+```ts
+`Webhook inválido: tópico desconhecido "${data.topic}"`
+`application_id ${notification.application_id} não pertence...`
+```
+
+Um payload com `topic: "orders_v2\n[ERROR] ..."` injetava **linhas falsas em qualquer logger** que registrasse o erro — forjar logs de auditoria. `parse` também aceitava strings gigantes (linha de log gigante).
+
+### Correção Implementada
+`sanitizeLog(value)`: remove CR/LF (a mensagem nunca quebra em múltiplas linhas) e trunca em 100 chars. Aplicado a `topic`, `application_id` e `user_id` em todas as mensagens que os ecoam. **Confirmado por teste**: payload com `\n` e `\r` produz mensagem com exatamente 1 linha.
+
+---
+
+## 🟢 ACHADO 7 — Prototype pollution local em funções de objeto (Rodada 2)
+
+### Localização
+```
+packages/core/src/utils.ts — deepOmitEmpty, omitEmpty, omitUndefined
+packages/core/src/transport.ts — toQuery
+```
+
+### Descrição do Problema
+`out[key] = value` onde `key` pode ser `__proto__` (vindo de `JSON.parse` de input não confiável — vira **own key**). A atribuição aciona o **setter de prototype**: `out['__proto__'] = {polluted: true}` faz o objeto resultante **herdar** `polluted` (confirmado por execução: `omitEmpty(evil).polluted === true`). Não é poluição global do `Object.prototype`, mas é uma superfície indesejada — o objeto retornado carrega propriedades herdadas que o chamador não criou.
+
+### Correção Implementada
+As quatro funções ignoram as chaves `__proto__`/`constructor`/`prototype` antes de atribuir. **Confirmado por teste**: `deepOmitEmpty(evil)` não contém `__proto__` nem `constructor`, e `({}).polluted` permanece `undefined` (sem poluição global).
+
+---
+
+## 🟢 ACHADO 8 — `resolveSellerItems` interpola IDs da API sem validação (Rodada 2)
+
+### Localização
+```
+packages/items/src/items.ts — resolveSellerItems()
+```
+
+### Descrição do Problema
+Os IDs dos anúncios vêm da **resposta da API** (`/users/{id}/items/search` — fonte semi-confiável) e eram interpolados em `/items/${id}` sem `assertValidId`. O `assertValidId` foi aplicado aos inputs do usuário, mas não a este fluxo interno.
+
+### Correção Implementada
+Cada ID passa por `assertValidId(id, 'item_id')` antes da resolução — um ID anômalo não pode alterar o endpoint. Defesa em profundidade (custo ~zero).
+
+---
+
+## 🟡 ACHADO 10 — Bypass de SSRF por trailing dot (Rodada 3)
+
+### Localização
+```
+packages/core/src/schemas.ts — isBlockedHttpHost()
+```
+
+### Descrição do Problema
+A checagem de hosts usava `url.hostname` **sem normalizar o trailing dot**. O WHATWG URL mantém o ponto final em hostnames: `new URL('http://localhost./x').hostname` → `localhost.`. Como a comparação era `host === 'localhost'`, o host `localhost.` **escapava** — e `localhost.` é o FQDN absoluto de `localhost`, resolvendo para 127.0.0.1 na maioria dos resolvers. Mesmo vetor para `metadata.` e `metadata.google.internal.`.
+
+### Evidência (execução real)
+```
+httpUrlSchema.parse('http://localhost./x')        → PASS (antes) / BLOQUEADO (depois)
+httpUrlSchema.parse('http://metadata./x')         → PASS (antes) / BLOQUEADO (depois)
+httpUrlSchema.parse('http://metadata.google.internal./x') → PASS (antes) / BLOQUEADO (depois)
+https://img.example.com/foto.jpg                  → ACEITO (inalterado)
+```
+
+### Correção Implementada
+O hostname é normalizado com `replace(/\.$/, '')` antes de todas as comparações. Nota: IPv4 com trailing dot (`127.0.0.1.`) já era normalizado pelo próprio WHATWG URL — o vetor era exclusivo de hostnames. `::ffff:`-mapeado, decimal/hex IPv4 (`2130706433`, `0x7f000001`) e ranges privados já estavam cobertos (reverificados na Rodada 3).
+
+**Testes:** casos de trailing dot adicionados ao bloco de hosts bloqueados em `schemas.test.ts`.
+
+---
+
+## 🟢 ACHADO 11 — `ApiError.message` sem sanitização (Rodada 3)
+
+### Localização
+```
+packages/errors/src/index.ts — errorMessageFor()
+```
+
+### Descrição do Problema
+A `message` ecoada pela API do ML (que pode refletir input do usuário em erros de validação) era interpolada **crua** em `ApiError.message`. Quando a exceção é serializada (logs, APM, dashboards), um `message` com `\r\n` forjava linhas de log — o mesmo vetor já corrigido nos webhooks, agora no caminho de erro da API.
+
+### Correção Implementada
+`errorMessageFor` sanitiza a `message` da API removendo CR/LF, separadores Unicode (`\u2028`/`\u2029`/`\u0085`) e control chars (`\x00-\x1f`, `\x7f`). O `body` bruto continua disponível estruturado em `err.body` (sem quebra de contrato).
+
+---
+
+## 🟢 ACHADO 12 — `sanitizeLog` sem NEL/DEL (Rodada 3)
+
+### Localização
+```
+packages/webhooks/src/webhooks.ts — sanitizeLog()
+```
+
+### Descrição do Problema
+O regex cobria CR/LF e `\u2028`/`\u2029`, mas não o NEL (`\u0085`, reconhecido como quebra de linha por vários loggers) nem o DEL (`\x7f`).
+
+### Correção Implementada
+Regex ampliado para `[\r\n\u2028\u2029\u0085\x00-\x1f\x7f]`. O mesmo padrão é usado no `ApiError.message` (Achado 11) — consistência entre os dois pontos de sanitização.
+
+---
+
+## 🟢 ACHADO 9 — `FileTokenStore` temp path previsível (Rodada 2)
+
+### Localização
+```
+packages/auth/src/token.ts — writeVersionedUnlocked()
+```
+
+### Descrição do Problema
+O arquivo temporário usa nome fixo (`sdk-token.json.tmp`) + `writeFile` (segue symlinks). Um atacante **local** com escrita no diretório do token poderia pre-criar o temp como symlink para outro arquivo.
+
+### Mitigação
+A escrita **temp+rename atômica** já protege o arquivo alvo (o `rename` substitui o symlink, não o segue); o risco exigiria acesso de escrita prévio ao diretório do usuário (que já implica acesso à conta). Aceito como risco residual baixo; mitigação adicional possível com sufixo aleatório (`randomBytes`) no nome do temp, se desejado.
+
+---
+
 ## ✅ Verificações sem problema
 
 | Área | Resultado |
@@ -187,8 +329,9 @@ Documentado no README: ao usar eventos, evite logar o objeto `headers`/`body` co
 | Severidade | Achados | Status |
 |---|---|---|
 | 🔴 Média-Alta | Path traversal (1) | ✅ Corrigido |
+| 🟡 Média | SSRF trailing dot (10), Log injection webhooks (6) | ✅ Corrigido |
 | 🟡 Baixa-Média | SSRF no schema (2), Redirects (3) | ✅ Corrigido |
-| 🟢 Baixa | `reply` NaN (4), Eventos (5) | ✅ Corrigido / 📚 Documentado |
+| 🟢 Baixa | `reply` NaN (4), Eventos (5), Prototype (7), API IDs (8), temp previsível (9), `ApiError.message` (11), NEL/DEL (12) | ✅ Corrigido / 📚 Documentado |
 
 ---
 
@@ -203,4 +346,4 @@ Documentado no README: ao usar eventos, evite logar o objeto `headers`/`body` co
 
 ---
 
-*Auditoria baseada em leitura dos 14 pacotes (src + testes), execução do `URL` parser para confirmação dos vetores, e validação final com 307 testes, lint, typecheck e build verdes (commit `3ae58fb`).*
+*Auditoria baseada em leitura dos 14 pacotes (src + testes), execução do `URL` parser para confirmação dos vetores (incluindo a Rodada 3, que confirmou o bypass por trailing dot por execução antes e depois da correção), e validação final com 313 testes, lint, typecheck e build verdes (Rodadas 1–2 no commit `3ae58fb`; Rodada 3 pendente de commit).*

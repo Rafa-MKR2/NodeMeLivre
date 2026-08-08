@@ -14,6 +14,21 @@ const TOPICS: WebhookTopic[] = [
 ]
 
 /**
+ * Sanitiza valores atacante-controlados antes de interpolar em mensagens de
+ * erro — remove CR/LF (impede log injection/forjar linhas) e trunca valores
+ * gigantes (evita linhas de log absurdas). O payload do webhook é POST
+ * público, então qualquer campo pode conter `\r\n` ou megabytes.
+ */
+function sanitizeLog(value: unknown): string {
+  // Remove quebras de linha (CR/LF, separadores Unicode) e control chars —
+  // um payload com `\n`, `\u2028` ou `\x1b` não pode forjar linhas de log.
+  const text = String(value)
+    .replace(/[\r\n\u2028\u2029\u0085\x00-\x1f\x7f]+/g, ' ')
+    .trim()
+  return text.length > 100 ? `${text.slice(0, 100)}…` : text
+}
+
+/**
  * Recursos de notificações (webhooks).
  *
  * O Mercado Livre envia um POST no callback configurado na aplicação com o
@@ -35,7 +50,7 @@ export class Webhooks {
     const notification = this.parse(payload)
     if (notification.application_id !== Number(applicationId)) {
       throw new WebhookError(
-        `Webhook rejeitado: application_id ${notification.application_id} não pertence à aplicação ${applicationId}`,
+        `Webhook rejeitado: application_id ${sanitizeLog(notification.application_id)} não pertence à aplicação ${sanitizeLog(applicationId)}`,
       )
     }
     return notification
@@ -58,7 +73,7 @@ export class Webhooks {
     const notification = this.verify(payload, applicationId)
     if (notification.user_id !== Number(expectedUserId)) {
       throw new WebhookError(
-        `Webhook rejeitado: user_id ${notification.user_id} não pertence ao vendedor ${expectedUserId}`,
+        `Webhook rejeitado: user_id ${sanitizeLog(notification.user_id)} não pertence ao vendedor ${sanitizeLog(expectedUserId)}`,
       )
     }
     return notification
@@ -82,7 +97,7 @@ export class Webhooks {
       throw new WebhookError('Webhook inválido: user_id deve ser um número')
     }
     if (!TOPICS.includes(data.topic as WebhookTopic)) {
-      throw new WebhookError(`Webhook inválido: tópico desconhecido "${data.topic}"`)
+      throw new WebhookError(`Webhook inválido: tópico desconhecido "${sanitizeLog(data.topic)}"`)
     }
     return data as unknown as WebhookNotification
   }

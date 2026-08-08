@@ -19,11 +19,17 @@ export type ResponseType = 'json' | 'text' | 'arraybuffer'
 /** Query params aceitos pelo transport. */
 export type QueryParams = Record<string, string | number | boolean | undefined>
 
-/** Converte um objeto de parâmetros (tipos de interface) em QueryParams. */
+import { UNSAFE_KEYS } from './utils.js'
+
+/**
+ * Converte um objeto de parâmetros (tipos de interface) em QueryParams.
+ * Chaves perigosas (`__proto__`, `constructor`, `prototype`) são ignoradas
+ * para evitar prototype pollution quando os params vêm de fonte não confiável.
+ */
 export function toQuery(params: object): QueryParams {
   const out: QueryParams = {}
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined) {
+    if (value !== undefined && !UNSAFE_KEYS.has(key)) {
       out[key] = value as string | number | boolean
     }
   }

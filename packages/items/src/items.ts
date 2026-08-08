@@ -188,6 +188,12 @@ async function resolveSellerItems(
     .map((entry) => (typeof entry === 'string' ? entry : (entry as Item | null)?.id))
     .filter((id): id is string => typeof id === 'string' && id !== '')
   if (ids.length === 0) return []
+  // Os IDs vêm da resposta da API (fonte semi-confiável) — mesmo assim,
+  // validamos antes de interpolar no path (defesa em profundidade: um ID
+  // anômalo não pode alterar o endpoint nem vazar para outra rota).
+  for (const id of ids) {
+    assertValidId(id, 'item_id')
+  }
   return mapWithConcurrency(ids, ITEM_RESOLUTION_CONCURRENCY, (id) =>
     transport.get<Item>(`/items/${id}`),
   )

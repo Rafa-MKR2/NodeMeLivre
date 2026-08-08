@@ -158,7 +158,15 @@ function parseRequestId(headers: Headers): string | undefined {
 }
 
 function errorMessageFor(status: number, apiMessage: unknown): string {
-  if (typeof apiMessage === 'string' && apiMessage.length > 0) return apiMessage
+  if (typeof apiMessage === 'string' && apiMessage.length > 0) {
+    // A mensagem vem da resposta da API (pode ecoar input do usuário) —
+    // remove quebras de linha/control chars para impedir log injection
+    // quando a exceção é serializada (ex.: logs, APM).
+    const sanitized = apiMessage.replace(/[\r\n\u2028\u2029\u0085\x00-\x1f\x7f]+/g, ' ').trim()
+    // Mensagem composta só de control chars vira vazia — cai no fallback do status.
+    if (sanitized.length === 0) return errorMessageFor(status, undefined)
+    return sanitized
+  }
 
   // Mensagens amigáveis para status comuns
   switch (status) {

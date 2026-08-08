@@ -1,9 +1,24 @@
+/**
+ * Chaves perigosas em objetos vindos de `JSON.parse` de fonte não confiável.
+ * `__proto__` aciona o setter de prototype ao atribuir; `constructor`/`prototype`
+ * permitem contornar o shadowing. São puladas em todas as funções que copiam
+ * objetos (defesa contra prototype pollution — local e herança indesejada).
+ */
+export const UNSAFE_KEYS: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'prototype'])
+
+/** Atribui `out[key] = value` ignorando chaves que acionam o prototype. */
+function assignOwn<T>(out: T, key: string, value: unknown): void {
+  if (UNSAFE_KEYS.has(key)) return
+  const target = out as Record<string, unknown>
+  target[key] = value
+}
+
 /** Remove chaves com valor `undefined` de um objeto (shallow). */
 export function omitUndefined<T extends object>(obj: T): Partial<T> {
   const out: Partial<T> = {}
   for (const [key, value] of Object.entries(obj)) {
     if (value !== undefined) {
-      out[key as keyof T] = value
+      assignOwn(out, key, value)
     }
   }
   return out
@@ -17,7 +32,7 @@ export function omitEmpty<T extends object>(obj: T): Partial<T> {
       if (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0) {
         continue
       }
-      out[key as keyof T] = value
+      assignOwn(out, key, value)
     }
   }
   return out
@@ -47,7 +62,7 @@ export function deepOmitEmpty<T>(value: T): T {
       ) {
         continue
       }
-      out[key] = cleaned
+      assignOwn(out, key, cleaned)
     }
     return out as T
   }

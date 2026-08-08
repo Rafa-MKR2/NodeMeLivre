@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { toQuery } from './transport.js'
 import {
   deepOmitEmpty,
   generateStateToken,
@@ -7,6 +8,15 @@ import {
   omitEmpty,
   omitUndefined,
 } from './utils.js'
+
+describe('toQuery — chaves perigosas', () => {
+  it('ignora __proto__/constructor/prototype nos query params', () => {
+    const query = toQuery(JSON.parse('{"q":"fone","__proto__":{"x":1}}'))
+    expect(query).toEqual({ q: 'fone' })
+    expect(JSON.stringify(query)).not.toContain('__proto__')
+    expect((query as Record<string, unknown>).x).toBeUndefined()
+  })
+})
 
 describe('omitUndefined', () => {
   it('deve remover apenas chaves undefined (mantém null)', () => {
@@ -63,6 +73,33 @@ describe('deepOmitEmpty', () => {
   it('deve retornar primitivos intactos', () => {
     expect(deepOmitEmpty(0)).toBe(0)
     expect(deepOmitEmpty('x')).toBe('x')
+  })
+
+  it('não deve vazar chaves perigosas (__proto__/constructor/prototype)', () => {
+    // JSON.parse cria `__proto__` como own key — o atacante não pode mais
+    // acionar o setter de prototype nem injetar `constructor.prototype`.
+    const evil = JSON.parse(
+      '{"title":"x","__proto__":{"polluted":true},"constructor":{"prototype":{"polluted2":true}}}',
+    )
+
+    const cleaned = deepOmitEmpty(evil)
+    expect(JSON.stringify(cleaned)).not.toContain('__proto__')
+    expect(JSON.stringify(cleaned)).not.toContain('constructor')
+    expect(JSON.stringify(cleaned)).not.toContain('polluted')
+    // Sem poluição global do Object.prototype.
+    expect(({} as Record<string, boolean>).polluted).toBeUndefined()
+    expect(({} as Record<string, boolean>).polluted2).toBeUndefined()
+  })
+
+  it('omitEmpty/omitUndefined não acionam o setter de __proto__', () => {
+    const evil = JSON.parse('{"__proto__":{"polluted":true},"a":1}')
+
+    const empty = omitEmpty(evil)
+    const undef = omitUndefined(evil)
+    expect((empty as Record<string, boolean>).polluted).toBeUndefined()
+    expect((undef as Record<string, boolean>).polluted).toBeUndefined()
+    expect(JSON.stringify(empty)).not.toContain('polluted')
+    expect(JSON.stringify(undef)).not.toContain('polluted')
   })
 })
 

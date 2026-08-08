@@ -41,6 +41,43 @@ describe('Webhooks.parse', () => {
       /tópico desconhecido/,
     )
   })
+
+  it('sanitiza valores atacante-controlados na mensagem de erro (anti log injection)', () => {
+    // CRLF no tópico não pode forjar linhas de log: a quebra é neutralizada
+    // (o valor vira uma única linha) e o conteúdo não vira um log falso.
+    const evilTopic = 'orders_v2\n[ERROR] falsificação de log'
+    let message = ''
+    try {
+      new Webhooks().parse({ ...notification, topic: evilTopic })
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error)
+    }
+    // Nenhuma quebra de linha sobrevive — o payload não divide a mensagem
+    // em linhas de log falsas.
+    expect(message.split('\n')).toHaveLength(1)
+    expect(message.split('\r')).toHaveLength(1)
+
+    // application_id atacante-controlado é sanitizado no verify.
+    const evilApp = '123\r\nfake'
+    let verifyMessage = ''
+    try {
+      new Webhooks().verify({ ...notification, application_id: evilApp }, 999)
+    } catch (error) {
+      verifyMessage = error instanceof Error ? error.message : String(error)
+    }
+    expect(verifyMessage.split('\n')).toHaveLength(1)
+    expect(verifyMessage.split('\r')).toHaveLength(1)
+
+    // Tópico gigante é truncado.
+    const huge = 'x'.repeat(10_000)
+    let hugeMessage = ''
+    try {
+      new Webhooks().parse({ ...notification, topic: huge })
+    } catch (error) {
+      hugeMessage = error instanceof Error ? error.message : String(error)
+    }
+    expect(hugeMessage.length).toBeLessThan(200)
+  })
 })
 
 describe('Webhooks.verify', () => {

@@ -188,7 +188,13 @@ function isBlockedHttpHost(value: string): boolean {
   } catch {
     return false
   }
-  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '') // remove colchetes de IPv6
+  // `localhost.` (trailing dot) é o mesmo host de `localhost` para a maioria
+  // dos resolvers (FQDN absoluto) — normalizamos antes de comparar para que
+  // um bypass por trailing dot não escape do bloqueio.
+  const host = url.hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '') // remove colchetes de IPv6
+    .replace(/\.+$/, '') // remove trailing dots de hostname (FQDN absoluto)
 
   if (host === 'localhost' || host.endsWith('.localhost')) return true
   if (host === 'metadata' || host === 'metadata.google.internal') return true

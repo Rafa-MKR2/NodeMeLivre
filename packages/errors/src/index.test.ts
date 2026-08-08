@@ -60,6 +60,19 @@ describe('toApiError', () => {
     const err = toApiError(500, {}, headers())
     expect(err.message).toBe('Erro interno do Mercado Livre — tente novamente mais tarde')
   })
+
+  it('sanitiza a message da API (anti log injection com CRLF)', () => {
+    const err = toApiError(400, { message: 'campo inválido\r\nforjado: x' }, headers())
+    expect(err.message).toContain('campo inválido')
+    expect(err.message).not.toMatch(/\r|\n/)
+    const unicode = toApiError(400, { message: 'a\u2028b\u0085c\x7fd' }, headers())
+    expect(unicode.message).not.toMatch(/[\u2028\u0085\x7f]/)
+  })
+
+  it('cai no fallback do status quando a message é só control chars', () => {
+    const err = toApiError(400, { message: '\n\r\u2028' }, headers())
+    expect(err.message).toBe('Requisição inválida — verifique os parâmetros enviados')
+  })
 })
 
 describe('InputValidationError', () => {

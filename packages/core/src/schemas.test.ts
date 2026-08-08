@@ -121,6 +121,13 @@ describe('Schemas genéricos do core', () => {
       'http://[::ffff:127.0.0.1]/x',
       'http://[::ffff:169.254.169.254]/x',
       'http://[::ffff:10.0.0.1]/x',
+      // Trailing dot: `localhost.` resolve para 127.0.0.1 na maioria dos
+      // resolvers (FQDN absoluto) — era um bypass do bloqueio SSRF.
+      'http://localhost./x',
+      'http://localhost../x',
+      'http://metadata./x',
+      'http://metadata.google.internal./x',
+      'http://127.0.0.1./x',
     ]
     for (const url of blocked) {
       expect(httpUrlSchema.check(url)).toEqual([
