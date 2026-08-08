@@ -213,10 +213,7 @@ console.log('Estágio 1 — varredura estática (padrões proibidos)\n')
 {
   const pagination = join(SRC, 'core', 'src', 'pagination.ts')
   const content = readFileSync(pagination, 'utf8')
-  report(
-    'paginate() guard de página repetida (Rodada 5)',
-    content.includes('previousFirstKey'),
-  )
+  report('paginate() guard de página repetida (Rodada 5)', content.includes('previousFirstKey'))
 }
 
 // 12. RateLimiter com teto de espera (Rodada 5, DoS: sleep gigante)
@@ -247,7 +244,7 @@ console.log('Estágio 1 — varredura estática (padrões proibidos)\n')
   const content = readFileSync(client, 'utf8')
   report(
     'redirect cross-origin remove Authorization (Rodada 6)',
-    content.includes("next.origin !== url.origin") &&
+    content.includes('next.origin !== url.origin') &&
       content.includes("fresh.delete('authorization')"),
   )
 }
@@ -272,7 +269,9 @@ console.log('Estágio 1 — varredura estática (padrões proibidos)\n')
   )
   report(
     'httpUrlSchema bloqueia IPv6 transition (NAT64/6to4/compat) (Rodada 6)',
-    content.includes('64:ff9b') && content.includes('2002:') && content.includes('isBlockedTransitionIPv6'),
+    content.includes('64:ff9b') &&
+      content.includes('2002:') &&
+      content.includes('isBlockedTransitionIPv6'),
   )
 }
 
@@ -300,7 +299,7 @@ console.log('Estágio 1 — varredura estática (padrões proibidos)\n')
 //    `"@nodemelivre/*": "*"` é anti-padrão ao publicar — o `*` não fixa
 //    compatibilidade e pode resolver qualquer versão publicada.
 {
-  let hits = []
+  const hits = []
   for (const pkg of readdirSync(SRC)) {
     if (IGNORED_DIRS.has(pkg) || pkg.startsWith('.')) continue
     const manifestPath = join(SRC, pkg, 'package.json')
@@ -339,14 +338,8 @@ console.log('Estágio 1 — varredura estática (padrões proibidos)\n')
 {
   const ci = join(ROOT, '.github', 'workflows', 'ci.yml')
   const content = readFileSync(ci, 'utf8')
-  report(
-    'ci.yml roda npm audit (Rodada 7)',
-    content.includes('npm audit --omit=dev'),
-  )
-  report(
-    'ci.yml roda security:check (Rodada 7)',
-    content.includes('npm run security:check'),
-  )
+  report('ci.yml roda npm audit (Rodada 7)', content.includes('npm audit --omit=dev'))
+  report('ci.yml roda security:check (Rodada 7)', content.includes('npm run security:check'))
 }
 
 // 22. CI com timeout (Rodada 7, hardening): job sem timeout pode rodar
@@ -362,7 +355,7 @@ console.log('Estágio 1 — varredura estática (padrões proibidos)\n')
 //    (40 hex chars) com comentário da versão.
 {
   const workflows = join(ROOT, '.github', 'workflows')
-  let hits = []
+  const hits = []
   for (const file of readdirSync(workflows)) {
     if (!file.endsWith('.yml') && !file.endsWith('.yaml')) continue
     const content = readFileSync(join(workflows, file), 'utf8')

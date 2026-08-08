@@ -79,7 +79,13 @@ function cleanDeep(value: unknown): unknown {
     if (Array.isArray(node)) {
       stack.push({ kind: 'array', items: node, index: 0, out: [], consumer })
     } else {
-      stack.push({ kind: 'object', entries: Object.entries(node as object), index: 0, out: {}, consumer })
+      stack.push({
+        kind: 'object',
+        entries: Object.entries(node as object),
+        index: 0,
+        out: {},
+        consumer,
+      })
     }
   }
 
