@@ -24,3 +24,6 @@ ADRs registram **por que** tomamos cada decisão de arquitetura do SDK.
 | [0008](0008-mocktransport.md) | MockTransport para testes sem rede | Aceita | 2026-08-04 |
 | [0009](0009-images-e-variacoes.md) | Resource images (upload multipart) e variações de item | Aceita | 2026-08-05 |
 | [0010](0010-paginacao-e-nivel-3.md) | Paginação assíncrona (`paginate`) e operações nível 3 | Aceita | 2026-08-05 |
+| [0011](0011-webhooks-e-messages.md) | Webhooks e messages (chat pós-venda) | Aceita | 2026-08-05 |
+| [0012](0012-operacoes-nivel-3.md) | Operações nível 3 (createAndPublish, reply, printLabel) | Aceita | 2026-08-05 |
+| [0013](0013-schemas-validacao-zero-dep.md) | Validação por schemas zero-dependência | Aceita | 2026-08-08 |

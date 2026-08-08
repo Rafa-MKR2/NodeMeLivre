@@ -138,7 +138,7 @@ await writeFile('etiqueta.pdf', Buffer.from(pdf))
 | **Questions** | Busca, `answer`, `reply` (responde + marca respondida). |
 | **Images** | `upload(Blob | Buffer | Uint8Array)` → multipart, retorna `id` + variações de tamanho no CDN; `uploadFromUrl(url)` registra por URL pública. |
 | **Messages** | Chat pós-venda: `list`, `get`, `send` (comprador ↔ vendedor). |
-| **Webhooks** | `parse` + `verify(applicationId)` + `verifyForUser(applicationId, userId)` — validação real do ML (não usa HMAC). |
+| **Webhooks** | `parse` + `verify(payload, applicationId)` + `verifyForUser(payload, applicationId, userId)` — validação real do ML (não usa HMAC). |
 | **Erros tipados** | `ApiError` (por status), `RateLimitError`, `NetworkError`, `OAuthError`, `PollingTimeoutError`, `WebhookError`, `InputValidationError`. |
 | **HTTP robusto** | Retry com backoff, timeout, rate-limit automático (`X-Rate-Limit-*`), eventos para observabilidade. |
 | **Resiliência** | `parallel()` e `ResilientTransport` — degradação parcial: o dashboard continua com o que conseguiu carregar. `mapWithConcurrency` — limite de execuções paralelas preservando a ordem. |

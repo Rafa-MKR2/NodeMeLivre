@@ -7,6 +7,7 @@ import type { AccessToken } from './token.js'
 const TOKEN_PATH = '/oauth/token'
 const DEFAULT_SITE_ID = 'MLB'
 const PKCE_TTL_MS = 10 * 60 * 1000 // mesma janela dos states (fallback in-memory)
+const CODE_VERIFIER_MAX_ENTRIES = 1000 // limite do fallback in-memory (anti memory leak)
 
 /** Domínios de autorização por site. Brasil usa mercadolivre, os demais mercadolibre. */
 const AUTH_DOMAINS: Record<string, string> = {
@@ -103,7 +104,12 @@ export class OAuthClient {
   private readonly pkceEnabled: boolean
   private readonly pkceMethod: PkceMethod
   readonly stateStore: OAuthStateStore | undefined
-  /** Fallback in-memory para code_verifier quando não há stateStore (compatibilidade). */
+  /**
+   * Fallback in-memory para code_verifier quando não há stateStore
+   * (compatibilidade). Limitado e com limpeza — sem stateStore, cada
+   * `authorizationUrl()` com pkce adiciona uma entrada que só expiraria na
+   * leitura; sem cap, um fluxo de URLs nunca consumidas vazaria memória.
+   */
   private readonly codeVerifiers = new Map<string, { verifier: string; createdAt: number }>()
 
   constructor(options: OAuthOptions) {
@@ -146,7 +152,7 @@ export class OAuthClient {
           this.stateStore.updateMetadata(state, { codeVerifier: verifier })
         } else {
           // Fallback in-memory para compatibilidade (single-processo)
-          this.codeVerifiers.set(state, { verifier, createdAt: Date.now() })
+          this.setCodeVerifier(state, verifier)
         }
       }
     }
@@ -161,6 +167,30 @@ export class OAuthClient {
    */
   consumeState(state: string): OAuthStateEntry | null {
     return this.stateStore?.consume(state) ?? null
+  }
+
+  /**
+   * Armazena code_verifier no fallback in-memory com limite e limpeza:
+   * remove entradas expiradas e, se o limite for atingido, expulsa a mais
+   * antiga (mesma política do `OAuthStateStore`).
+   */
+  private setCodeVerifier(state: string, verifier: string): void {
+    this.sweepExpiredCodeVerifiers()
+    if (this.codeVerifiers.size >= CODE_VERIFIER_MAX_ENTRIES) {
+      const oldest = this.codeVerifiers.keys().next().value
+      if (oldest !== undefined) this.codeVerifiers.delete(oldest)
+    }
+    this.codeVerifiers.set(state, { verifier, createdAt: Date.now() })
+  }
+
+  /** Remove entradas expiradas do fallback in-memory. */
+  private sweepExpiredCodeVerifiers(): void {
+    const now = Date.now()
+    for (const [state, entry] of this.codeVerifiers.entries()) {
+      if (now - entry.createdAt > PKCE_TTL_MS) {
+        this.codeVerifiers.delete(state)
+      }
+    }
   }
 
   /** Recupera o code_verifier PKCE do metadata do state (stateStore ou fallback in-memory). */

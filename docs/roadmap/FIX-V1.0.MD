@@ -51,11 +51,12 @@ Além dos problemas acima, o dogfooding contínuo do painel administrativo gerou
 | D | **Webhook por vendedor** — `Webhooks.verifyForUser(payload, appId, userId)` valida `application_id` E `user_id` | Implementado — painel ignora notificações de outro vendedor com `200 { ok, ignored }` (evita retry do ML sem processar) |
 | E | **Cobertura de rotas HTTP** — testes de integração reais (servidor + `fetch`) com o SDK mockado | Implementado — 10 testes: webhook (200/ignored/503), `/from-url` (201/400/401), export SSE (stream/done/abort/401) |
 | F | **`Orders.list()`** — paginação assíncrona (`for await`) + `AbortSignal` no resource `orders` | Implementado — reusa `paginate()` do core; testes de páginas/limit/signal/abort |
-| H | **Validação centralizada por schemas (Fase 2)** — mini-DSL zero-dep em `@nodemelivre/core` + schemas de domínio (`itemInputCreateSchema`, `itemInputPartialSchema`, `orderSearchParamsSchema`); `assertValidItemInput` e validações inline de messages/images eliminados (mensagens preservadas, testáveis em isolamento) | Implementado — ADR-0013; `schemas.test.ts` com 26 testes |
-| I | **Testes de integração reais (Fase 4)** — `MockMercadoLivreServer` (`node:http`, zero-dep) em `@nodemelivre/core/test-utils`; contrato HTTP (método/path/query/headers), retry 429/5xx, rate limit por recurso, timeout, network partition e refresh 401; SDK completo por HTTP real (OAuth PKCE + `FileTokenStore` + multi-instância) | Implementado — `packages/http/src/integration.test.ts` (14 testes) + `packages/sdk/src/integration.test.ts` (3 testes) |
+| H | **Validação centralizada por schemas (Fase 2)** — mini-DSL zero-dep em `@nodemelivre/core` + schemas de domínio (`itemInputCreateSchema`, `itemInputPartialSchema`, `orderSearchParamsSchema`); `assertValidItemInput` e validações inline de messages/images eliminados (mensagens preservadas, testáveis em isolamento) | Implementado — ADR-0013; `schemas.test.ts` com 30 testes |
+| I | **Testes de integração reais (Fase 4)** — `MockMercadoLivreServer` (`node:http`, zero-dep) em `@nodemelivre/core/test-utils`; contrato HTTP (método/path/query/headers), retry 429/5xx, rate limit por recurso, timeout, network partition e refresh 401; SDK completo por HTTP real (OAuth PKCE + `FileTokenStore` + multi-instância) | Implementado — `packages/http/src/integration.test.ts` (17 testes) + `packages/sdk/src/integration.test.ts` (3 testes) |
 | J | **Chaos tests (Fase 4)** — `chaos()` no mock: `failureRate`/`failStatus` (instabilidade intermitente), `latencyMs`/`jitterMs` (latência variável) e partição por endpoint (prefixo), com `random` injetável para determinismo; degradação parcial validada com `parallel`/`parallelBestEffort`/`ResilientTransport` (painel com stats `null` em vez de 500) | Implementado — `packages/http/src/chaos.test.ts` (7 testes) |
 | K | **Integração dos fluxos nível 3** — `items.createAndPublish` (cria + publica, fail fast de validação), `orders.waitUntilPaid` (polling real: já pago, paga após N, `PollingTimeoutError`, `AbortSignal` → AbortError) e `questions.reply` (POST `/answers` com `question_id` numérico) por HTTP real autenticado | Implementado — `packages/sdk/src/level3.integration.test.ts` (9 testes) |
 | G | **`Questions.list()`** — idem no resource `questions` (normaliza resposta `questions`→`results`) | Implementado — `QuestionSearchParams` ganhou `offset`/`limit`; testes de páginas/limit/signal/abort |
+| L | **Auditoria de segurança (4 rodadas)** — 15 achados, 13 corrigidos (+1 documentado, +1 mitigado): path traversal (`assertValidId`), SSRF (`httpUrlSchema` endurecido + bypass por trailing dot), redirects validados, log injection (webhooks + `ApiError.message`), prototype pollution, re-autenticação que perdia o token novo, CSPRNG no `instanceId`, fallback de `code_verifier` limitado | Implementado — ver `docs/auditoria-seguranca.md`; 316 testes |
 
 Objetivos da série v1.0.x
 Estabilidade
@@ -340,9 +341,8 @@ Billing
 Middleware
 Plugins
 Cache
-PKCE
 
-permanecem planejados para versões futuras.
+permanecem planejados para versões futuras. **PKCE** (RFC 7636) foi **antecipado** e implementado na série (exigência do Mercado Livre para apps novos — ver `docs/roadmap/README.md`).
 
 Critério de conclusão
 

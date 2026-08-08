@@ -265,6 +265,16 @@ describe('OAuthClient PKCE (RFC 7636)', () => {
     expect(token.accessToken).toBe('access-1')
   })
 
+  it('fallback in-memory não vaza memória: expulsa a entrada mais antiga no limite', () => {
+    const ml = new OAuthClient({ clientId: 'APP_ID', clientSecret: 'SECRET', pkce: true })
+    // Gera 1001 states — o limite do fallback é 1000; o primeiro é expulso.
+    for (let i = 0; i < 1001; i++) {
+      ml.authorizationUrl({ redirectUri: 'https://app.com/callback', state: `s-${i}` })
+    }
+    expect(ml.getCodeVerifier('s-0')).toBeUndefined() // expulso (mais antigo)
+    expect(ml.getCodeVerifier('s-1000')).toBeTruthy() // presente
+  })
+
   it('deve expor error_description ou message do ML no OAuthError', async () => {
     mockFetch(() =>
       json(

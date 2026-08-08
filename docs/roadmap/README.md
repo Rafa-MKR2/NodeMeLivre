@@ -11,6 +11,7 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | **v0.3.x** | Paginação assíncrona + operações nível 3 | Ergonomia: `for await`, `publish`, `pause`, `waitUntilPaid` | ✔ Concluído |
 | **v0.4.x** | Webhooks (`parse`/`verify`) + `messages` | Notificação em tempo real e chat de comprador | ✔ Concluído |
 | **v1.0.0** | API pública consolidada, docs completas, estabilidade | Marco de produção | ✔ Concluído 2026-08-05 |
+| **v1.0.x** | Hardening & auditoria de segurança (4 rodadas, 15 achados corrigidos) | Base sólida para v1.1 | 🚧 Em andamento — ver [FIX-V1.0.MD](FIX-V1.0.MD) e [auditoria-seguranca.md](../auditoria-seguranca.md) |
 
 > **Critério de "versão sólida" (v1.0):** o integrador consegue, de ponta a ponta, autenticar, criar anúncio com foto e variação, paginar buscas, acompanhar vendas/perguntas/envios em tempo real e operar por chat — sem workaround manual.
 
@@ -119,9 +120,20 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | Feature | Status |
 |---|---|
 | API pública consolidada (SDK facade com todos os 12 resources) | ✔ |
-| Docs completas (ADRs 0001–0012, exemplos, roadmap, CHANGELOG) | ✔ |
-| 171 testes (Vitest) passando | ✔ |
+| Docs completas (ADRs 0001–0013, exemplos, roadmap, CHANGELOG) | ✔ |
+| 171 testes (Vitest) passando (na época; hoje 316) | ✔ |
 | CI verde (lint, typecheck, teste, build) | ✔ |
+
+## Em andamento (v1.0.x — hardening & segurança)
+
+| Feature | Status |
+|---|---|
+| Contratos de estado v2 (TokenStore versionado, lease, PKCE multi-instância) | ✔ Concluído |
+| Validação centralizada por schemas (Fase 2, ADR-0013) | ✔ Concluído |
+| Integração real + chaos testing (Fase 4) | ✔ Concluído |
+| Auditoria de segurança (4 rodadas, 15 achados / 13 corrigidos) | ✔ Concluído — ver [auditoria-seguranca.md](../auditoria-seguranca.md) |
+| Fase 2.2 (validator middleware no ResourceTransport) e Fase 5 (métricas, circuit breaker, idempotency) | ⏳ Planejado |
+| 316 testes (Vitest) | ✔ |
 
 ---
 

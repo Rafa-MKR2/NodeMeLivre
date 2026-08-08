@@ -16,9 +16,9 @@ Auditoria de segurança complementar ao [DOCUMENTO_CORRECOES.md](../DOCUMENTO_CO
 - **Exposição de segredos** (logs, eventos)
 - Higiene: permissões de arquivo, CSPRNG, CI, segredos no repo
 
-Em **três rodadas** (auditoria inicial + re-auditoria exaustiva com execução real de experimentos e revisão independente + verificação adicional com revisor independente), foram identificados **12 achados** (1 média-alta, 2 médias, 4 baixa-média, 5 baixos). **11 correções foram implementadas** (path traversal, SSRF no schema de URL + bypass por trailing dot, redirects não autorizados, `question_id` numérico, log injection nos webhooks e no `ApiError.message`, prototype pollution local no core e IDs da API sem validação) e 1 item documentado/mitigado. O estado atual é **verde**: 313 testes, lint, typecheck e build passando.
+Em **quatro rodadas** (auditoria inicial + re-auditoria exaustiva com execução real de experimentos e revisão independente + verificação adicional com revisor independente + auditoria focada em OAuth/PKCE/timing/concorrência), foram identificados **15 achados** (1 média-alta, 3 médias, 2 baixa-média, 9 baixos). **13 correções foram implementadas**, 1 item documentado (eventos) e 1 mitigado (temp previsível do `FileTokenStore`). O estado atual é **verde**: 316 testes, lint, typecheck e build passando.
 
-**Veredito:** o SDK estava **acima da média** em higiene (CSPRNG para state, token em arquivo com `0o600`, sem segredos em logs, rate-limit por recurso não-fragmentado). O único vetor com impacto real — path traversal via normalização de URL — foi corrigido e coberto por testes.
+**Veredito:** o SDK estava **acima da média** em higiene (CSPRNG para state, token em arquivo com `0o600`, sem segredos em logs, rate-limit por recurso não-fragmentado). Os vetores com impacto real — path traversal via normalização de URL, bypass de SSRF por trailing dot e perda de token na re-autenticação — foram corrigidos e cobertos por testes.
 
 ---
 
@@ -50,6 +50,14 @@ Em **três rodadas** (auditoria inicial + re-auditoria exaustiva com execução 
 | 10 | Bypass de SSRF por **trailing dot** (`localhost.`, `metadata.` — FQDN absoluto que resolve para loopback) | 🟡 Média | ✅ Corrigido | `httpUrlSchema` normaliza hostname (`trailing dot` removido) |
 | 11 | `ApiError.message` interpola a `message` da API sem sanitização (log injection em logs/APM) | 🟢 Baixa | ✅ Corrigido | `errorMessageFor` sanitiza control chars |
 | 12 | `sanitizeLog` não cobria NEL (`\u0085`) e DEL (`\x7f`) | 🟢 Baixa | ✅ Corrigido | regex ampliado no webhooks |
+
+### Rodada 4 — OAuth/PKCE, timing attacks e concorrência
+
+| # | Achado | Severidade | Status | Onde |
+|---|--------|------------|--------|------|
+| 13 | **Re-autenticação perde o token novo** — `saveAuthorizationCode` com `compareAndSet(token, 0)` falha silenciosamente quando já há token (version ≥ 1); o SDK segue com sessão expirada após re-login | 🟡 Média | ✅ Corrigido | `TokenManager` lê a versão atual + força sobrescrita em conflito |
+| 14 | `instanceId` do `TokenManager` com `Math.random()` (holderId do lease previsível — colisão liberaria leases cruzados) | 🟢 Baixa | ✅ Corrigido | CSPRNG (`randomBytes(8)`) |
+| 15 | Fallback in-memory de `code_verifier` sem limite (memory leak com URLs nunca consumidas) | 🟢 Baixa | ✅ Corrigido | max 1000 entradas + sweep de expiradas |
 
 ---
 
@@ -239,6 +247,21 @@ Cada ID passa por `assertValidId(id, 'item_id')` antes da resolução — um ID 
 
 ---
 
+## 🟢 ACHADO 9 — `FileTokenStore` temp path previsível (Rodada 2)
+
+### Localização
+```
+packages/auth/src/token.ts — writeVersionedUnlocked()
+```
+
+### Descrição do Problema
+O arquivo temporário usa nome fixo (`sdk-token.json.tmp`) + `writeFile` (segue symlinks). Um atacante **local** com escrita no diretório do token poderia pre-criar o temp como symlink para outro arquivo.
+
+### Mitigação
+A escrita **temp+rename atômica** já protege o arquivo alvo (o `rename` substitui o symlink, não o segue); o risco exigiria acesso de escrita prévio ao diretório do usuário (que já implica acesso à conta). Aceito como risco residual baixo; mitigação adicional possível com sufixo aleatório (`randomBytes`) no nome do temp, se desejado.
+
+---
+
 ## 🟡 ACHADO 10 — Bypass de SSRF por trailing dot (Rodada 3)
 
 ### Localização
@@ -294,18 +317,73 @@ Regex ampliado para `[\r\n\u2028\u2029\u0085\x00-\x1f\x7f]`. O mesmo padrão é 
 
 ---
 
-## 🟢 ACHADO 9 — `FileTokenStore` temp path previsível (Rodada 2)
+## 🟡 ACHADO 13 — Re-autenticação perde o token novo (Rodada 4)
 
 ### Localização
 ```
-packages/auth/src/token.ts — writeVersionedUnlocked()
+packages/auth/src/refresh.ts — TokenManager.saveAuthorizationCode()
 ```
 
 ### Descrição do Problema
-O arquivo temporário usa nome fixo (`sdk-token.json.tmp`) + `writeFile` (segue symlinks). Um atacante **local** com escrita no diretório do token poderia pre-criar o temp como symlink para outro arquivo.
+`saveAuthorizationCode` persistia o resultado do `authorization_code` com `compareAndSet(token, 0)` — semântica "só se o store estiver vazio". No **re-login** (store já contém token com `version ≥ 1`), o compare-and-set retorna `null` e o **retorno era ignorado**: o token novo era descartado silenciosamente e o SDK continuava com a sessão anterior (potencialmente expirada).
 
-### Mitigação
-A escrita **temp+rename atômica** já protege o arquivo alvo (o `rename` substitui o symlink, não o segue); o risco exigiria acesso de escrita prévio ao diretório do usuário (que já implica acesso à conta). Aceito como risco residual baixo; mitigação adicional possível com sufixo aleatório (`randomBytes`) no nome do temp, se desejado.
+### Evidência (execução real)
+```
+após 1a auth: access-code-1
+após re-auth:   access-code-1 (esperado access-code-2)  ← BUG
+após correção:  access-code-2  ✓
+```
+
+### Correção Implementada
+Lê a versão atual (`getWithVersion()`) e usa compare-and-set atômico com ela; se houver conflito (outra escrita no meio), **força a sobrescrita uma única vez** — o token recém-trocado por um novo login é sempre mais novo que qualquer refresh concorrente e não pode ser perdido.
+
+---
+
+## 🟢 ACHADO 14 — `instanceId` previsível no `TokenManager` (Rodada 4)
+
+### Localização
+```
+packages/auth/src/refresh.ts — randomInstanceId()
+```
+
+### Descrição do Problema
+O `instanceId` (holderId do lease distribuído) usava `Math.random().toString(36).substring(2, 10)` — ~31 bits, gerador previsível. Uma colisão entre duas instâncias faria uma liberar o lease da outra (`releaseLease(holderId)`), permitindo **refresh duplo** (duas chamadas concorrentes a `/oauth/token` com o mesmo `refresh_token`).
+
+### Correção Implementada
+`randomBytes(8).toString('hex')` (CSPRNG, 64 bits) — consistente com a disciplina do projeto (`generateStateToken` usa `getRandomValues` de 256 bits). `Math.random` segue apenas em jitter de retry/backoff e caos de teste (não-secretos).
+
+---
+
+## 🟢 ACHADO 15 — Fallback in-memory de `code_verifier` sem limite (Rodada 4)
+
+### Localização
+```
+packages/auth/src/oauth.ts — codeVerifiers (fallback sem stateStore)
+```
+
+### Descrição do Problema
+Sem `stateStore`, o `OAuthClient` armazena `code_verifier` por state em um `Map` in-memory com TTL de 10 min — mas o TTL só era checado **na leitura**. Um fluxo que gera muitas `authorizationUrl()` com pkce e nunca completa os callbacks (usuários abandonando login, atacante gerando URLs) crescia o `Map` sem limite: vazamento de memória.
+
+### Correção Implementada
+Mesma política do `OAuthStateStore`: limite de **1000 entradas** (expulsa a mais antiga) + sweep de entradas expiradas a cada inserção. Teste: 1001 states → o primeiro é expulso, o último permanece.
+
+---
+
+## ✅ Verificações da Rodada 4 — OAuth/PKCE, timing e concorrência (sem problema)
+
+| Vetor | Resultado |
+|---|---|
+| **PKCE RFC 7636** | verifier 43 chars (32 bytes base64url), charset `[A-Za-z0-9-._~]`, S256 sem padding — confirmado por execução ✅ |
+| **Timing attack no state** | `consumeState` usa `Map.get` (hash lookup, não comparação string-a-string) — sem canal de tempo mensurável ✅ |
+| **Timing em webhooks** | `application_id`/`user_id` comparados com `===` são números não-secretos ✅ |
+| **Refresh concorrente** | single-flight local + lease distribuído: 2 instâncias fazem **1 refresh** (confirmado por execução); `compareAndSet` previne sobrescrita; lease liberado em `finally` ✅ |
+| **Stale lease** | holder morto segura o lease até o TTL (30s); `waitForLeaseRelease` aguarda e o token é relido — indisponibilidade temporária, sem corrupção ✅ |
+| **Leeway** | renova 60s antes da expiração (clock injetável) — confirmado ✅ |
+| **State single-use** | `consume` 2x retorna `null` na segunda — confirmado por execução ✅ |
+| **Code trocado 2x** | rejeitado pelo ML (`invalid_grant`); SDK não reusa code ✅ |
+| **Segredos em logs/eventos** | `client_secret`/`refresh_token` nunca logados pelos caminhos padrão (eventos emitem `userId`/URL) ✅ |
+| **401 sem refresh_token** | `OAuthError('missing_refresh_token')` tipado, sem loop ✅ |
+| **Checksum do FileTokenStore** | SHA-256 sem MAC — detecta corrupção/tamper acidental; atacante com escrita no arquivo pode recalcular (risco residual aceito, documentado) ⚪ |
 
 ---
 
@@ -329,9 +407,9 @@ A escrita **temp+rename atômica** já protege o arquivo alvo (o `rename` substi
 | Severidade | Achados | Status |
 |---|---|---|
 | 🔴 Média-Alta | Path traversal (1) | ✅ Corrigido |
-| 🟡 Média | SSRF trailing dot (10), Log injection webhooks (6) | ✅ Corrigido |
+| 🟡 Média | SSRF trailing dot (10), Log injection webhooks (6), Re-auth perde token (13) | ✅ Corrigido |
 | 🟡 Baixa-Média | SSRF no schema (2), Redirects (3) | ✅ Corrigido |
-| 🟢 Baixa | `reply` NaN (4), Eventos (5), Prototype (7), API IDs (8), temp previsível (9), `ApiError.message` (11), NEL/DEL (12) | ✅ Corrigido / 📚 Documentado |
+| 🟢 Baixa | `reply` NaN (4), Eventos (5), Prototype (7), API IDs (8), temp previsível (9), `ApiError.message` (11), NEL/DEL (12), instanceId previsível (14), code_verifier leak (15) | ✅ Corrigido / 📚 Documentado |
 
 ---
 
@@ -346,4 +424,4 @@ A escrita **temp+rename atômica** já protege o arquivo alvo (o `rename` substi
 
 ---
 
-*Auditoria baseada em leitura dos 14 pacotes (src + testes), execução do `URL` parser para confirmação dos vetores (incluindo a Rodada 3, que confirmou o bypass por trailing dot por execução antes e depois da correção), e validação final com 313 testes, lint, typecheck e build verdes (Rodadas 1–2 no commit `3ae58fb`; Rodada 3 pendente de commit).*
+*Auditoria baseada em leitura dos 14 pacotes (src + testes), execução real de experimentos para confirmação dos vetores (URL parser na Rodada 3; refresh/re-auth/PKCE na Rodada 4), e validação final com 316 testes, lint, typecheck e build verdes (Rodadas 1–2 no commit `3ae58fb`; Rodada 3 no commit `2aa5ed0`; Rodada 4 pendente de commit).*

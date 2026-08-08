@@ -10,7 +10,7 @@
 
 Foram identificadas **7 falhas** no SDK NodeMeLivre, sendo **2 CRÍTICAS (P0)** que quebram funcionalidades essenciais em produção clusterizada, **2 ALTAS (P1)** que afetam arquitetura e segurança, **2 MÉDIAS (P2)** com risco de vazamento de memória e race conditions, e **1 BAIXA (P4)**.
 
-Todos os testes atuais passam (222/222), mas **não cobrem cenários multi-instância, concorrência de arquivos, nem vazamento de memória em long-running**.
+Todos os testes atuais passam (222/222 na época da análise), mas **não cobriam cenários multi-instância, concorrência de arquivos, nem vazamento de memória em long-running** — desde então, os P0/P1/P2 foram resolvidos (status abaixo) e a suíte cresceu para **316 testes**, incluindo integração real multi-instância e chaos testing. Ver também [docs/auditoria-seguranca.md](docs/auditoria-seguranca.md) para a auditoria de segurança complementar (4 rodadas, 15 achados, 13 corrigidos + 1 documentado + 1 mitigado).
 
 ---
 
@@ -18,12 +18,12 @@ Todos os testes atuais passam (222/222), mas **não cobrem cenários multi-inst�
 
 | Item | Status | Onde |
 |------|--------|------|
-| P0-1 PKCE code_verifier multi-instância | ✅ Resolvido | `code_verifier` no `metadata` do `OAuthStateStore` + fallback in-memory |
+| P0-1 PKCE code_verifier multi-instância | ✅ Resolvido | `code_verifier` no `metadata` do `OAuthStateStore` + fallback in-memory com limite/sweep |
 | P0-2 FileTokenStore não-atômico | ✅ Resolvido | `FileTokenStore` v2: escrita atômica (temp+rename), file lock, checksum, backup, lease |
 | P1-3 Singleton global OAuthStateStore | ✅ Resolvido | `getGlobalOAuthStateStore`/`resetGlobalOAuthStateStore` **removidos** (breaking) |
 | P1-4 Headers de segurança em requests | ✅ Resolvido | `securityHeaders` e `SECURITY_HEADERS` **removidos** (breaking) |
 | P2-5 DeduplicatingLogger memory leak | ✅ Resolvido | cleanup periódico + `maxEntries` + `stop()` |
-| P2-6 TokenManager race condition | ✅ Resolvido | `compareAndSet` + lease distribuído no `doRefresh` |
+| P2-6 TokenManager race condition | ✅ Resolvido | `compareAndSet` + lease distribuído no `doRefresh`; **re-auth** persiste token novo (Rodada 4); `instanceId` CSPRNG |
 | P4-7 RateLimiter promises órfãs | ✅ Mitigado | `try/finally` já garante a remoção da espera single-flight |
 
 ---
@@ -464,15 +464,15 @@ Adicionar `try/finally` garantido (já tem) + limpeza periódica opcional. **Bai
 
 ## Checklist de Validação Pós-Fix
 
-- [ ] Todos os 222 testes existentes passam
-- [ ] Novos testes de integração multi-instância para PKCE
-- [ ] Testes de concorrência para FileTokenStore (10 writers paralelos)
-- [ ] Teste de memory leak para DeduplicatingLogger (100k logs únicos)
-- [ ] Teste de race condition para TokenManager (simular clear concorrente)
-- [ ] Build + typecheck + lint verdes
-- [ ] Exemplos atualizados se breaking changes
-- [ ] CHANGELOG atualizado
-- [ ] ADR nova para decisões arquiteturais (PKCE storage, FileTokenStore atomicity)
+- [x] Todos os testes existentes passam (222 → **316 hoje**, incluindo os novos)
+- [x] Novos testes de integração multi-instância para PKCE (`auth/src/integration.test.ts`)
+- [x] Testes de concorrência para FileTokenStore (10 writers paralelos)
+- [x] Teste de memory leak para DeduplicatingLogger (limite + cleanup periódico)
+- [x] Teste de race condition para TokenManager (single-flight + lease; re-auth)
+- [x] Build + typecheck + lint verdes
+- [x] Exemplos atualizados se breaking changes
+- [x] CHANGELOG atualizado
+- [x] ADR nova para decisões arquiteturais (ADR-0013 schemas; contratos de estado na Fase 1)
 
 ---
 

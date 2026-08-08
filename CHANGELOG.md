@@ -30,6 +30,9 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 - **Bypass de SSRF por trailing dot corrigido (Rodada 3)** — `http://localhost./x`, `http://metadata./x` e `http://metadata.google.internal./x` escapavam do `httpUrlSchema` (o WHATWG URL mantém o ponto final; o host era comparado como `localhost.` ≠ `localhost`). O hostname agora é normalizado (`trailing dot` removido) antes das comparações — `localhost.` resolve para loopback na maioria dos resolvers (FQDN absoluto).
 - **`ApiError.message` sanitizado (Rodada 3)** — a mensagem ecoada pela API (que pode refletir input do usuário) tem CR/LF, separadores Unicode (`\u2028`/`\u0085`) e control chars (`\x00-\x1f`, `\x7f`) removidos antes de virar `message` — sem log injection quando a exceção é serializada (logs/APM).
 - **`sanitizeLog` ampliado (Rodada 3)** — além de CR/LF/`\u2028`/`\u2029`, agora remove NEL (`\u0085`), control chars (`\x00-\x1f`) e DEL (`\x7f`).
+- **Re-autenticação persiste o token novo (Rodada 4)** — `TokenManager.saveAuthorizationCode` usava `compareAndSet(token, 0)`, que falhava silenciosamente quando já existia token (version ≥ 1): um re-login não substituía o token antigo e o SDK seguia com a sessão expirada. Agora lê a versão atual para compare-and-set atômico e força a sobrescrita em conflito — o token recém-trocado nunca é perdido.
+- **`instanceId` padrão do `TokenManager` com CSPRNG (Rodada 4)** — antes `Math.random().toString(36)` (~31 bits previsível): colisão entre instâncias liberaria leases cruzados (refresh duplo). Agora `randomBytes(8).toString('hex')`.
+- **Fallback in-memory de `code_verifier` limitado (Rodada 4)** — sem `stateStore`, cada `authorizationUrl()` com pkce adicionava uma entrada que só expirava na leitura (vazamento de memória com URLs nunca consumidas). Agora: limite de 1000 entradas (expulsa a mais antiga) + sweep de expiradas (mesma política do `OAuthStateStore`).
 
 ### Corrigido
 

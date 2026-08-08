@@ -2,7 +2,7 @@
 
 **Data:** 2026-08-08  
 **Versão:** 1.0.0-beta.1  
-**Escopo:** 14 pacotes, 45 arquivos fonte, 6.5k LOC, 222 testes
+**Escopo:** 14 pacotes, 45 arquivos fonte, 6.5k LOC, 222 testes (na época da análise; hoje 316 testes, ver seções de status)
 
 ---
 
@@ -12,7 +12,7 @@ O SDK **funciona** (testes passam, build compila, tipo seguro), mas apresenta **
 
 | Métrica | Valor | Avaliação |
 |---------|-------|-----------|
-| **Cobertura de testes** | 222 testes / 6.5k LOC | Boa quantidade, mas **foco errado** |
+| **Cobertura de testes** | 222 testes / 6.5k LOC (na época; hoje 316) | Boa quantidade, mas **foco errado** (na época) |
 | **Duplicação de código** | 3+ funções idênticas (`paginationOptions`) | **Alta** |
 | **Acoplamento temporal** | PKCE em memória, FileTokenStore não-atômico | **Crítico** |
 | **Type safety real** | `unknown` bem usado, mas `any` implícito em cast | **Média** |
@@ -105,7 +105,7 @@ function paginationOptions(params, signal) {
 
 ### 1.5 Testes Testam Mocks, Não Comportamento Real
 
-**Padrão dominante nos 222 testes:**
+**Padrão dominante nos 222 testes (na época; hoje 316, com suites de integração real e chaos):**
 ```typescript
 // items.test.ts:10
 const transport = fakeTransport(() => item)
@@ -126,7 +126,9 @@ expect(result).toEqual(item)
 | Paginação com AbortSignal entre páginas | ✅ (unit) |
 | Retry com backoff real | ❌ (mock time) |
 
-**Cobertura ilusória:** 222 testes = 222 cenários de "mock retorna X, espero Y". **Zero testes de integração** contra API real ou simulador de rede.
+**Cobertura ilusória (na época):** 222 testes = 222 cenários de "mock retorna X, espero Y". **Zero testes de integração** contra API real ou simulador de rede.
+
+> **Status posterior (Fase 4):** adicionada suite de integração real com `MockMercadoLivreServer` (`node:http`, zero-dep) — contrato HTTP, retry 429/5xx, rate limit, timeout, network partition, refresh 401, OAuth PKCE ponta a ponta, fluxos nível 3 e **chaos testing** (latência, instabilidade, partição por endpoint). Total hoje: 316 testes.
 
 ---
 
@@ -359,6 +361,8 @@ export interface ResourceTransport {
 1. `paginationOptions` → `@nodemelivre/core/utils`
 2. `sleepWithAbort` → `@nodemelivre/core/utils`
 3. `resolveSellerItems` → generic `resolveIds(transport, ids, concurrency)`
+
+> **Status: 1 e 2 Implementados (2026-08-08).** `paginationOptions` e `sleepWithAbort` centralizados em `@nodemelivre/core/utils` e reutilizados por items/orders/questions — fim da duplicação (3 cópias de `paginationOptions`, 2 de `sleep`). O item 3 (`resolveSellerItems` genérico) foi mantido específico de items com `mapWithConcurrency` (mesmo objetivo de limite de concorrência, sem generalizar antes da necessidade).
 
 ### Fase 4: Testes Reais (Contínuo)
 1. **Testcontainers** com mock server do ML (OpenAPI spec)

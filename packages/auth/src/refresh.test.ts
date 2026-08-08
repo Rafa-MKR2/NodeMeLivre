@@ -95,6 +95,19 @@ describe('TokenManager', () => {
     expect((await store.get())?.accessToken).toBe('access-abc')
   })
 
+  it('re-autenticação substitui o token anterior (re-login)', async () => {
+    const { manager, store } = createManager()
+    await manager.saveAuthorizationCode('code-1', 'https://app.com/callback')
+    await manager.saveAuthorizationCode('code-2', 'https://app.com/callback')
+    expect((await store.get())?.accessToken).toBe('access-code-2')
+  })
+
+  it('instanceId padrão usa CSPRNG (não Math.random)', async () => {
+    const { manager } = createManager()
+    const id = (manager as unknown as { instanceId: string }).instanceId
+    expect(id).toMatch(/^tm-[0-9a-f]{16}$/)
+  })
+
   it('deve limpar o token', async () => {
     const { manager, store } = createManager()
     await store.set(storedToken())

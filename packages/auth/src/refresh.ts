@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 import { type Logger, silentLogger } from '@nodemelivre/core'
 import { OAuthError } from '@nodemelivre/errors'
@@ -74,8 +75,16 @@ export class TokenManager extends EventEmitter<TokenManagerEvents> implements To
     if (state !== undefined) grant.state = state
     if (codeVerifier !== undefined) grant.codeVerifier = codeVerifier
     const token = await this.oauth.exchangeCode(code, grant)
-    // Primeira escrita: usa compareAndSet com expectedVersion = 0
-    await this.store.compareAndSet(token, 0)
+    // Re-autenticação substitui o token anterior (novo login é sempre mais
+    // novo que qualquer refresh concorrente). Lê a versão atual e faz
+    // compare-and-set atômico; em conflito (outra escrita no meio), força a
+    // sobrescrita uma única vez — o token recém-trocado não pode ser perdido.
+    const current = await this.store.getWithVersion()
+    const expected = current?.version ?? 0
+    const newVersion = await this.store.compareAndSet(token, expected)
+    if (newVersion === null) {
+      await this.store.compareAndSet(token, null)
+    }
     return token
   }
 
@@ -178,5 +187,7 @@ export class TokenManager extends EventEmitter<TokenManagerEvents> implements To
 }
 
 function randomInstanceId(): string {
-  return Math.random().toString(36).substring(2, 10)
+  // CSPRNG — o holderId do lease não pode ser previsível: com Math.random,
+  // uma colisão entre instâncias liberaria leases cruzados (refresh duplo).
+  return randomBytes(8).toString('hex')
 }

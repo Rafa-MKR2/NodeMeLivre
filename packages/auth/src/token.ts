@@ -86,8 +86,9 @@ export class InMemoryTokenStore implements TokenStore {
 
   async compareAndSet(token: AccessToken, expectedVersion: number | null): Promise<number | null> {
     if (expectedVersion === null) {
-      // Primeira escrita ou força sobrescrita
-      this.token = this.createVersioned(token)
+      // Primeira escrita ou força sobrescrita — incrementa da versão atual
+      // (mesmo comportamento do FileTokenStore: a versão nunca regride).
+      this.token = this.createVersioned(token, (this.token?.version ?? 0) + 1)
       return this.token.version
     }
     if (this.token === null) {
