@@ -144,6 +144,8 @@ await writeFile('etiqueta.pdf', Buffer.from(pdf))
 | **Resiliência** | `parallel()` e `ResilientTransport` — degradação parcial: o dashboard continua com o que conseguiu carregar. `mapWithConcurrency` — limite de execuções paralelas preservando a ordem. |
 
 > **Nota de segurança:** o SDK não injeta headers de resposta (CSP, `X-Frame-Options`, etc.) nas requisições — esses headers pertencem ao seu servidor. Use Helmet (ou equivalente) no seu app. Para CSRF no fluxo OAuth, configure um `OAuthStateStore` — o `state` é gerado e armazenado automaticamente na URL de autorização e validado no callback via `ml.consumeState()`.
+>
+> **Controles de entrada:** IDs de recursos são validados antes de irem ao path (`assertValidId` — bloqueia path traversal como `../../users/me`), `Images.uploadFromUrl` rejeita URLs para endereços locais/privados/metadata de nuvem, e o `HttpClient` só segue redirecionamentos para hosts autorizados (mesmo host ou `*.mercadolibre.com`), sem downgrade https→http — um `Location` malicioso nunca recebe o token do SDK. Ao usar os **eventos** (`request`, `httpError`, `response`...), evite logar o objeto `headers`/`body` completo sem redação — o header `Authorization` e dados do body podem conter informações sensíveis.
 
 ---
 

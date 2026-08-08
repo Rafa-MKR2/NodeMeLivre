@@ -1,4 +1,4 @@
-import type { ResourceTransport } from '@nodemelivre/core'
+import { assertValidId, type ResourceTransport } from '@nodemelivre/core'
 import type { User } from '@nodemelivre/types'
 
 /** Recursos de usuários. */
@@ -12,6 +12,7 @@ export class Users {
 
   /** Dados públicos de um usuário. */
   get(userId: number | string): Promise<User> {
+    assertValidId(userId, 'user_id')
     return this.transport.get(`/users/${userId}`)
   }
 }

@@ -1,5 +1,6 @@
 import {
   assertValid,
+  assertValidId,
   deepOmitEmpty,
   itemInputCreateSchema,
   itemInputPartialSchema,
@@ -25,11 +26,13 @@ export class Items {
 
   /** Detalhes de um item. */
   get(itemId: string): Promise<Item> {
+    assertValidId(itemId, 'item_id')
     return this.transport.get(`/items/${itemId}`)
   }
 
   /** Descrição do anúncio. */
   getDescription(itemId: string): Promise<ItemDescription> {
+    assertValidId(itemId, 'item_id')
     return this.transport.get(`/items/${itemId}/description`)
   }
 
@@ -41,22 +44,26 @@ export class Items {
 
   /** Atualiza campos do anúncio. */
   async update(itemId: string, changes: Partial<ItemInput>): Promise<Item> {
+    assertValidId(itemId, 'item_id')
     assertValid(itemInputPartialSchema, changes)
     return this.transport.put(`/items/${itemId}`, deepOmitEmpty(changes))
   }
 
   /** Substitui a descrição do anúncio. */
   updateDescription(itemId: string, text: string): Promise<ItemDescription> {
+    assertValidId(itemId, 'item_id')
     return this.transport.put(`/items/${itemId}/description`, { plain_text: text })
   }
 
   /** Altera o status do anúncio (ex.: fechar, pausar). */
   updateStatus(itemId: string, status: ItemStatus): Promise<Item> {
+    assertValidId(itemId, 'item_id')
     return this.transport.post(`/items/${itemId}/status`, { status })
   }
 
   /** Busca de itens por site. */
   search(siteId: string, params: ItemSearchParams = {}): Promise<ItemSearchResponse> {
+    assertValidId(siteId, 'site_id')
     return this.transport.get(`/sites/${siteId}/search`, { query: toQuery(params) })
   }
 
@@ -75,6 +82,7 @@ export class Items {
     params: ItemSearchParams = {},
     signal?: AbortSignal,
   ): AsyncGenerator<Item, void, void> {
+    assertValidId(siteId, 'site_id')
     const fetchPage: PageFetcher<Item> = (offset, limit, pageSignal) =>
       this.transport.get<ItemSearchResponse>(`/sites/${siteId}/search`, {
         query: toQuery({ ...params, offset, limit }),
@@ -103,6 +111,7 @@ export class Items {
     sellerId: number,
     params: ItemSearchParams = {},
   ): Promise<ItemSearchResponse> {
+    assertValidId(sellerId, 'seller_id')
     const page = await this.transport.get<ItemSearchResponse>(`/users/${sellerId}/items/search`, {
       query: toQuery(params),
     })
@@ -127,6 +136,7 @@ export class Items {
     params: ItemSearchParams = {},
     signal?: AbortSignal,
   ): AsyncGenerator<Item, void, void> {
+    assertValidId(sellerId, 'seller_id')
     const fetchPage: PageFetcher<Item> = async (offset, limit, pageSignal) => {
       const page = await this.transport.get<ItemSearchResponse>(`/users/${sellerId}/items/search`, {
         query: toQuery({ ...params, offset, limit }),

@@ -250,6 +250,23 @@ describe('Items', () => {
 })
 
 describe('Items — validação de entrada', () => {
+  it('rejeita id com path traversal antes de chamar o transport', async () => {
+    const transport = fakeTransport(() => item)
+    const items = new Items(transport)
+
+    expect(() => items.get('../../users/me')).toThrow(InputValidationError)
+    expect(() => items.get('MLB1/../..')).toThrow(InputValidationError)
+    expect(transport.calls).toHaveLength(0)
+  })
+
+  it('rejeita site_id inválido na busca', async () => {
+    const transport = fakeTransport(() => ({ results: [], paging: { total: 0 } }))
+    const items = new Items(transport)
+
+    expect(() => items.search('MLB/../../users/me')).toThrow(InputValidationError)
+    expect(transport.calls).toHaveLength(0)
+  })
+
   it('create rejeita sem title nem family_name', async () => {
     const items = new Items(fakeTransport(() => item))
     await expect(items.create({ price: 10, available_quantity: 5 })).rejects.toThrow(

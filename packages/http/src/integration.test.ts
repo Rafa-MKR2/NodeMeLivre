@@ -201,6 +201,44 @@ describe('Integração HTTP real — contrato e resiliência', () => {
     })
   })
 
+  describe('Redirecionamentos seguros', () => {
+    it('segue redirect do mesmo host', async () => {
+      server.respond('GET', '/antigo', 302, undefined, { location: '/novo' })
+      server.respond('GET', '/novo', 200, { ok: true })
+
+      const result = await createClient().get<{ ok: boolean }>('/antigo')
+
+      expect(result.ok).toBe(true)
+      expect(server.requests.map((r) => r.path)).toEqual(['/antigo', '/novo'])
+    })
+
+    it('bloqueia redirect para host não autorizado (não vaza o token)', async () => {
+      server.respond('GET', '/antigo', 302, undefined, {
+        location: 'http://evil.example.com/steal',
+      })
+
+      const err = await createClient({ auth: provider('token-secreto'), retry: { maxRetries: 0 } })
+        .get('/antigo')
+        .catch((e) => e)
+
+      expect(err).toBeInstanceOf(NetworkError)
+      // A requisição maliciosa jamais acontece.
+      expect(server.requests.map((r) => r.path)).toEqual(['/antigo'])
+    })
+
+    it('bloqueia loop infinito de redirects', async () => {
+      server.respond('GET', '/loop', 302, undefined, { location: '/loop' })
+
+      const err = await createClient({ retry: { maxRetries: 0 } })
+        .get('/loop')
+        .catch((e) => e)
+
+      expect(err).toBeInstanceOf(NetworkError)
+      // 1 tentativa inicial + 5 hops máximos (e retries não se aplicam a 3xx).
+      expect(server.requests.length).toBeLessThanOrEqual(6)
+    })
+  })
+
   describe('Rate limit e falhas de rede', () => {
     it('espera o reset do rate limit por recurso antes de prosseguir', async () => {
       let calls = 0

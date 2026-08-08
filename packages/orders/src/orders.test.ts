@@ -1,5 +1,5 @@
 import { fakeTransport } from '@nodemelivre/core/test-utils'
-import { PollingTimeoutError } from '@nodemelivre/errors'
+import { InputValidationError, PollingTimeoutError } from '@nodemelivre/errors'
 import { describe, expect, it, vi } from 'vitest'
 import { Orders } from './orders.js'
 
@@ -10,6 +10,14 @@ describe('Orders', () => {
     const transport = fakeTransport(() => order)
     await new Orders(transport).get(123)
     expect(transport.calls[0]).toMatchObject({ method: 'GET', path: '/orders/123' })
+  })
+
+  it('rejeita order_id com path traversal antes de chamar o transport', () => {
+    const transport = fakeTransport(() => order)
+
+    expect(() => new Orders(transport).get('../../users/me')).toThrow(InputValidationError)
+    expect(() => new Orders(transport).items('123/..')).toThrow(InputValidationError)
+    expect(transport.calls).toHaveLength(0)
   })
 
   it('deve buscar vendas com query', async () => {

@@ -1,4 +1,5 @@
 import { fakeTransport } from '@nodemelivre/core/test-utils'
+import { InputValidationError } from '@nodemelivre/errors'
 import { describe, expect, it } from 'vitest'
 import { Questions } from './questions.js'
 
@@ -34,6 +35,16 @@ describe('Questions', () => {
       path: '/answers',
       body: { question_id: 5, text: 'Sim, tem garantia' },
     })
+  })
+
+  it('rejeita question_id com path traversal ou não numérico', () => {
+    const transport = fakeTransport(() => ({}))
+    const questions = new Questions(transport)
+
+    expect(() => questions.get('../../users/me')).toThrow(InputValidationError)
+    expect(() => questions.reply('../../x', 'sim')).toThrow(InputValidationError)
+    expect(() => questions.reply('abc', 'sim')).toThrow(InputValidationError)
+    expect(transport.calls).toHaveLength(0)
   })
 
   it('reply deve responder e marcar como respondida (alias de answer)', async () => {

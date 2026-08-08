@@ -1,4 +1,4 @@
-import { type ResourceTransport, toQuery } from '@nodemelivre/core'
+import { assertValidId, type ResourceTransport, toQuery } from '@nodemelivre/core'
 import type { Shipment, ShipmentLabelFormat } from '@nodemelivre/types'
 
 /** Opções da impressão de etiqueta. */
@@ -13,6 +13,7 @@ export class Shipments {
 
   /** Detalhes de um envio (rastreio, endereços, status). */
   get(shipmentId: number | string): Promise<Shipment> {
+    assertValidId(shipmentId, 'shipment_id')
     return this.transport.get(`/shipments/${shipmentId}`)
   }
 
@@ -24,9 +25,12 @@ export class Shipments {
     shipmentIds: number | string | Array<number | string>,
     options: PrintLabelOptions = {},
   ): Promise<ArrayBuffer> {
-    const ids = Array.isArray(shipmentIds) ? shipmentIds.join(',') : String(shipmentIds)
+    const ids = Array.isArray(shipmentIds) ? shipmentIds : [shipmentIds]
+    for (const id of ids) {
+      assertValidId(id, 'shipment_id')
+    }
     const query = {
-      shipment_ids: ids,
+      shipment_ids: ids.join(','),
       response_type: options.format ?? 'pdf',
     }
     return this.transport.get('/shipment_labels', {

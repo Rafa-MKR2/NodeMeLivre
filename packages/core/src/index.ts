@@ -12,6 +12,7 @@ export { parallel, parallelBestEffort, ResilientTransport } from './resilience.j
 export {
   arrayOf,
   assertValid,
+  assertValidId,
   booleanValue,
   enumOf,
   httpUrlSchema,

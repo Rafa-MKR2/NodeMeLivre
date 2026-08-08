@@ -1,5 +1,6 @@
 import {
   assertValid,
+  assertValidId,
   makeSchema,
   type QueryParams,
   type ResourceTransport,
@@ -72,6 +73,8 @@ export class Messages {
     sellerId: number | string,
     params: MessagesListParams = {},
   ): Promise<MessagesConversation> {
+    assertValidId(packId, 'pack_id')
+    assertValidId(sellerId, 'seller_id')
     const query: QueryParams = { tag: 'post_sale' }
     if (params.markAsRead !== undefined) {
       query.mark_as_read = params.markAsRead
@@ -84,6 +87,7 @@ export class Messages {
 
   /** Detalhes de uma mensagem pelo id. */
   get(messageId: number | string): Promise<Message> {
+    assertValidId(messageId, 'message_id')
     return this.transport.get(`/messages/${messageId}`, { query: { tag: 'post_sale' } })
   }
 

@@ -69,6 +69,12 @@ export interface HttpClientOptions {
 
 const JSON_CONTENT_TYPE = 'application/json'
 
+/** Máximo de redirecionamentos seguidos manualmente (anti-loop). */
+const MAX_REDIRECTS = 5
+
+/** Hosts para os quais redirecionamentos são autorizados (além do próprio baseUrl). */
+const ALLOWED_REDIRECT_HOSTS = new Set(['api.mercadolibre.com', 'api.mercadolivre.com.br'])
+
 export class HttpClient extends EventEmitter<HttpClientEvents> {
   private readonly baseUrl: string
   private readonly defaultTimeoutMs: number
@@ -250,7 +256,70 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
     timeoutMs: number | undefined,
     signal: AbortSignal | undefined,
   ): Promise<Response> {
-    const init: RequestInit = { method, headers }
+    // Redirecionamentos NÃO são seguidos cegamente pelo fetch: cada hop é
+    // resolvido e validado manualmente (mesmo host/família autorizada e
+    // sem downgrade https→http) — um `Location` malicioso não consegue
+    // levar o token para outro destino.
+    let currentUrl = url
+    let currentMethod = method
+    let currentHeaders = headers
+    let currentBody = body
+
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      const init = this.buildFetchInit(
+        currentMethod,
+        currentHeaders,
+        currentBody,
+        timeoutMs,
+        signal,
+      )
+      const response = await this.fetchImpl(currentUrl, init)
+
+      if (!isRedirectStatus(response.status)) return response
+
+      const location = response.headers.get('location')
+      if (location === null) {
+        throw new NetworkError('Redirecionamento sem header Location', undefined)
+      }
+      const next = resolveRedirectTarget(currentUrl, location)
+      if (next === null) {
+        throw new NetworkError(
+          `Redirecionamento bloqueado: destino não autorizado (${location})`,
+          undefined,
+        )
+      }
+
+      // 303 sempre vira GET; 301/302 em POST vira GET (spec do fetch).
+      // HEAD é preservado em 303; 307/308 preservam método e corpo.
+      if (
+        currentMethod !== 'GET' &&
+        currentMethod !== 'HEAD' &&
+        (response.status === 303 || response.status === 301 || response.status === 302)
+      ) {
+        currentMethod = 'GET'
+        currentBody = undefined
+        const fresh = new Headers(currentHeaders)
+        fresh.delete('content-type')
+        fresh.delete('content-length')
+        currentHeaders = fresh
+      }
+      currentUrl = next
+    }
+
+    throw new NetworkError(
+      `Número máximo de redirecionamentos excedido (${MAX_REDIRECTS})`,
+      undefined,
+    )
+  }
+
+  private buildFetchInit(
+    method: HttpMethod,
+    headers: Headers,
+    body: unknown,
+    timeoutMs: number | undefined,
+    signal: AbortSignal | undefined,
+  ): RequestInit {
+    const init: RequestInit = { method, headers, redirect: 'manual' }
 
     if (body !== undefined) {
       if (isBodyInit(body)) {
@@ -274,7 +343,7 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
       init.signal = AbortSignal.any(signals)
     }
 
-    return this.fetchImpl(url, init)
+    return init
   }
 
   private backoffDelay(attempt: number, error: ApiError): number {
@@ -293,6 +362,38 @@ function buildUrl(baseUrl: string, path: string, query: HttpClientRequest['query
     }
   }
   return url
+}
+
+function isRedirectStatus(status: number): boolean {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308
+}
+
+/**
+ * Valida e resolve um destino de redirecionamento.
+ *
+ * Autoriza apenas: mesmo host do baseUrl (ou subdomínio), ou os hosts
+ * oficiais do Mercado Livre. Rejeita downgrade https→http e qualquer outro
+ * protocolo/host — impede que um `Location` malicioso (ex.: endpoint de
+ * metadata da nuvem) receba o `Authorization` do SDK.
+ */
+function resolveRedirectTarget(current: URL, location: string): URL | null {
+  let next: URL
+  try {
+    next = new URL(location, current)
+  } catch {
+    return null
+  }
+
+  // Nunca rebaixar https→http nem aceitar protocolos não-HTTP.
+  if (next.protocol !== 'https:' && next.protocol !== 'http:') return null
+  if (current.protocol === 'https:' && next.protocol !== 'https:') return null
+
+  const host = next.hostname.toLowerCase()
+  const sameHost = host === current.hostname.toLowerCase()
+  const subdomain = host.endsWith(`.${current.hostname.toLowerCase()}`)
+  const official = [...ALLOWED_REDIRECT_HOSTS].some((h) => host === h || host.endsWith(`.${h}`))
+  if (!sameHost && !subdomain && !official) return null
+  return next
 }
 
 async function parseBody(

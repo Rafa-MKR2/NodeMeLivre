@@ -151,11 +151,21 @@ export function object<T extends object>(
   })
 }
 
-/** URL http(s) válida — rejeita protocolos locais ou exóticos (ex.: upload por URL). */
+/**
+ * URL http(s) válida — rejeita protocolos locais ou exóticos (ex.: upload por URL).
+ *
+ * Além do protocolo, bloqueia destinos que poderiam ser usados em SSRF:
+ * `localhost`, IPs de loopback (127/8), ranges privados (10/8, 172.16/12,
+ * 192.168/16), link-local/metadata de nuvem (169.254.0.0/16, fe80::/10) e
+ * hostnames de metadata (metadata.google.internal).
+ */
 export const httpUrlSchema: ValidationSchema<string> = makeSchema((value) => {
   if (typeof value !== 'string') return ['deve ser uma string']
-  if (isHttpUrl(value)) return []
-  return ['URL deve ser http(s) válida para upload por URL']
+  if (!isHttpUrl(value)) return ['URL deve ser http(s) válida para upload por URL']
+  if (isBlockedHttpHost(value)) {
+    return ['URL bloqueada: endereços locais, privados ou de metadados não são permitidos']
+  }
+  return []
 })
 
 function isHttpUrl(value: string): boolean {
@@ -164,6 +174,102 @@ function isHttpUrl(value: string): boolean {
     return url.protocol === 'http:' || url.protocol === 'https:'
   } catch {
     return false
+  }
+}
+
+/**
+ * Detecta hosts usados em ataques SSRF (IPs privados/locais e metadata cloud).
+ * A verificação é sintática sobre o hostname — `new URL` já validou o formato.
+ */
+function isBlockedHttpHost(value: string): boolean {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    return false
+  }
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '') // remove colchetes de IPv6
+
+  if (host === 'localhost' || host.endsWith('.localhost')) return true
+  if (host === 'metadata' || host === 'metadata.google.internal') return true
+
+  if (isIPv4Literal(host)) {
+    return isBlockedIPv4(host)
+  }
+
+  if (host.includes(':')) {
+    // IPv6: loopback, link-local e ULA
+    if (host === '::1' || host === '::' || host === '0:0:0:0:0:0:0:1') return true
+    if (host.startsWith('fe80') || host.startsWith('fc') || host.startsWith('fd')) return true
+    // IPv4-mapeado em IPv6 (::ffff:127.0.0.1) — roteia para loopback/privado
+    // em muitos sistemas; reaplica a checagem de octetos no IPv4 embutido.
+    // O WHATWG URL normaliza para hex (`::ffff:7f00:1`), então tratamos as
+    // duas representações (dotted e dois grupos hex de 16 bits).
+    const dotted = host.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/)?.slice(1)
+    if (dotted?.[0] !== undefined) {
+      return isBlockedIPv4(dotted[0])
+    }
+    const hex = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i)?.slice(1)
+    if (hex?.[0] !== undefined && hex[1] !== undefined) {
+      const hi = Number.parseInt(hex[0], 16)
+      const lo = Number.parseInt(hex[1], 16)
+      const ip = `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`
+      return isBlockedIPv4(ip)
+    }
+  }
+
+  return false
+}
+
+/** Verifica octetos de um IPv4 literal contra ranges privados/locais. */
+function isBlockedIPv4(ip: string): boolean {
+  const octets = ip.split('.').map((n) => Number(n))
+  const a = octets[0]
+  const b = octets[1]
+  if (a !== undefined && a === 0) return true // 0.0.0.0/8
+  if (a === 10) return true // 10/8 privado
+  if (a === 127) return true // loopback
+  if (a === 169 && b === 254) return true // 169.254/16 link-local/metadata
+  if (a === 172 && b !== undefined && b >= 16 && b <= 31) return true // 172.16/12 privado
+  if (a === 192 && b === 168) return true // 192.168/16 privado
+  if (a === 100 && b !== undefined && b >= 64 && b <= 127) return true // 100.64/10 CGNAT
+  return false
+}
+
+function isIPv4Literal(host: string): boolean {
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(host)
+}
+
+/**
+ * Padrão seguro para IDs de recursos do Mercado Livre interpolados em paths.
+ * Aceita `MLB123`, números, `_` e `-` — rejeita `/`, `.` (traversal), espaços
+ * e qualquer byte que mude a estrutura da URL.
+ */
+const SAFE_ID_PATTERN = /^[A-Za-z0-9_-]+$/
+
+/**
+ * Valida um ID de recurso antes de interpolá-lo no path da API.
+ *
+ * Bloqueia path traversal (`../../users/me`), caracteres que alteram a URL
+ * (`/`, `?`, `#`, espaço) e valores que degradam o contrato (NaN, negativo,
+ * vazio). Lança `InputValidationError` na falha — mesmo erro tipado do SDK.
+ */
+export function assertValidId(value: string | number, label = 'id'): void {
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new InputValidationError(`${label} inválido: deve ser um inteiro não-negativo`)
+    }
+    return
+  }
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > 100 ||
+    !SAFE_ID_PATTERN.test(value)
+  ) {
+    throw new InputValidationError(
+      `${label} inválido: use apenas letras, números, "_" ou "-" (sem "/", "." ou espaços)`,
+    )
   }
 }
 

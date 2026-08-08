@@ -247,3 +247,65 @@ describe('HttpClient.request', () => {
     expect(result).toBe('conteúdo plano')
   })
 })
+
+describe('HttpClient — redirecionamentos seguros', () => {
+  it('segue redirect do mesmo host', async () => {
+    const spy = mockFetch((url) => {
+      if (url.pathname === '/antigo') {
+        return { status: 302, headers: { location: '/novo' }, body: undefined }
+      }
+      return json({ ok: true })
+    })
+
+    const result = await client().get<{ ok: boolean }>('/antigo')
+    expect(result.ok).toBe(true)
+    // 1 chamada no /antigo + 1 no /novo
+    expect(spy).toHaveBeenCalledTimes(2)
+  })
+
+  it('bloqueia redirect para host não autorizado', async () => {
+    const spy = mockFetch(() => ({
+      status: 302,
+      headers: { location: 'http://evil.example.com/steal' },
+      body: undefined,
+    }))
+
+    const err = await client({ retry: { maxRetries: 0 } })
+      .get('/antigo')
+      .catch((e) => e)
+
+    expect(err).toBeInstanceOf(NetworkError)
+    expect(spy).toHaveBeenCalledTimes(1) // nunca chega no host malicioso
+  })
+
+  it('bloqueia downgrade https→http no redirect', async () => {
+    const spy = mockFetch(() => ({
+      status: 302,
+      headers: { location: 'http://api.mercadolibre.com/novo' },
+      body: undefined,
+    }))
+
+    const err = await client({ retry: { maxRetries: 0 } })
+      .get('/antigo')
+      .catch((e) => e)
+
+    expect(err).toBeInstanceOf(NetworkError)
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+  it('bloqueia loop infinito de redirects', async () => {
+    const spy = mockFetch(() => ({
+      status: 302,
+      headers: { location: '/loop' },
+      body: undefined,
+    }))
+
+    const err = await client({ retry: { maxRetries: 0 } })
+      .get('/loop')
+      .catch((e) => e)
+
+    expect(err).toBeInstanceOf(NetworkError)
+    // 1 inicial + 5 hops máximos
+    expect(spy).toHaveBeenCalledTimes(6)
+  })
+})

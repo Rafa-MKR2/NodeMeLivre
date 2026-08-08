@@ -8,6 +8,7 @@ import {
 import {
   arrayOf,
   assertValid,
+  assertValidId,
   booleanValue,
   enumOf,
   httpUrlSchema,
@@ -106,11 +107,69 @@ describe('Schemas genéricos do core', () => {
     ])
   })
 
+  it('httpUrlSchema bloqueia hosts de SSRF (localhost, privados, metadata)', () => {
+    const blocked = [
+      'http://localhost:3000/x',
+      'http://127.0.0.1/x',
+      'http://169.254.169.254/latest/meta-data/',
+      'http://10.0.0.1/x',
+      'http://192.168.0.1/x',
+      'http://172.16.0.1/x',
+      'http://[::1]/x',
+      'http://metadata.google.internal/x',
+      // IPv4-mapeado em IPv6 — roteia para loopback/privado em muitos sistemas
+      'http://[::ffff:127.0.0.1]/x',
+      'http://[::ffff:169.254.169.254]/x',
+      'http://[::ffff:10.0.0.1]/x',
+    ]
+    for (const url of blocked) {
+      expect(httpUrlSchema.check(url)).toEqual([
+        'URL bloqueada: endereços locais, privados ou de metadados não são permitidos',
+      ])
+    }
+    // Hosts públicos seguem válidos.
+    expect(httpUrlSchema.check('https://img.example.com/foto.jpg')).toEqual([])
+    expect(httpUrlSchema.check('https://s3.amazonaws.com/x.png')).toEqual([])
+  })
+
   it('nonEmptyFileSchema rejeita Blob vazio', () => {
     expect(nonEmptyFileSchema.check(new Blob(['x']))).toEqual([])
     expect(nonEmptyFileSchema.check(new Blob([]))).toEqual([
       'Imagem vazia — envie um arquivo com conteúdo',
     ])
+  })
+})
+
+describe('assertValidId — proteção contra path traversal', () => {
+  it('aceita IDs válidos do Mercado Livre', () => {
+    expect(() => assertValidId('MLB1', 'item_id')).not.toThrow()
+    expect(() => assertValidId('MLB1234567890', 'item_id')).not.toThrow()
+    expect(() => assertValidId(123, 'order_id')).not.toThrow()
+    expect(() => assertValidId('abc_def-1', 'pack_id')).not.toThrow()
+  })
+
+  it('rejeita path traversal e caracteres que alteram a URL', () => {
+    const invalid = [
+      '../../users/me',
+      'MLB1/../../users/me',
+      '/items/1',
+      'a b',
+      'a?b=1',
+      'a#frag',
+      'a%2Fb',
+      '',
+      '..',
+      '.',
+    ]
+    for (const id of invalid) {
+      expect(() => assertValidId(id, 'item_id')).toThrow(InputValidationError)
+    }
+  })
+
+  it('rejeita números inválidos', () => {
+    expect(() => assertValidId(NaN, 'order_id')).toThrow(InputValidationError)
+    expect(() => assertValidId(-1, 'order_id')).toThrow(InputValidationError)
+    expect(() => assertValidId(1.5, 'order_id')).toThrow(InputValidationError)
   })
 })
 

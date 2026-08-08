@@ -1,5 +1,6 @@
 import {
   assertValid,
+  assertValidId,
   orderSearchParamsSchema,
   type PageFetcher,
   paginate,
@@ -17,6 +18,7 @@ export class Orders {
 
   /** Detalhes de uma venda. */
   get(orderId: number | string): Promise<Order> {
+    assertValidId(orderId, 'order_id')
     return this.transport.get(`/orders/${orderId}`)
   }
 
@@ -50,6 +52,7 @@ export class Orders {
 
   /** Itens de uma venda. */
   items(orderId: number | string): Promise<OrderItem[]> {
+    assertValidId(orderId, 'order_id')
     return this.transport.get(`/orders/${orderId}/items`)
   }
 
@@ -65,6 +68,7 @@ export class Orders {
     orderId: number | string,
     options: { timeoutMs?: number; intervalMs?: number; signal?: AbortSignal } = {},
   ): Promise<Order> {
+    assertValidId(orderId, 'order_id')
     const timeoutMs = options.timeoutMs ?? 60_000
     const intervalMs = options.intervalMs ?? 2_000
     const signal = options.signal

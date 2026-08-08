@@ -1,10 +1,12 @@
 import {
+  assertValidId,
   type PageFetcher,
   paginate,
   paginationOptions,
   type ResourceTransport,
   toQuery,
 } from '@nodemelivre/core'
+import { InputValidationError } from '@nodemelivre/errors'
 import type {
   Question,
   QuestionAnswer,
@@ -60,6 +62,7 @@ export class Questions {
 
   /** Detalhes de uma pergunta. */
   get(questionId: number | string): Promise<Question> {
+    assertValidId(questionId, 'question_id')
     return this.transport.get(`/questions/${questionId}`)
   }
 
@@ -73,6 +76,11 @@ export class Questions {
 
   /** Responde uma pergunta e a marca como respondida (alias de `answer`). */
   reply(questionId: number | string, text: string): Promise<QuestionAnswer> {
-    return this.answer({ questionId: Number(questionId), text })
+    assertValidId(questionId, 'question_id')
+    const numericId = Number(questionId)
+    if (!Number.isSafeInteger(numericId) || numericId <= 0) {
+      throw new InputValidationError('question_id deve ser um número positivo')
+    }
+    return this.answer({ questionId: numericId, text })
   }
 }

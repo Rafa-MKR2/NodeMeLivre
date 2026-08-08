@@ -18,6 +18,13 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 - `Webhooks.verifyForUser(payload, applicationId, expectedUserId)` em `@nodemelivre/webhooks`: valida `application_id` e o `user_id` da notificação contra o vendedor esperado — controle real contra payloads forjados (o ML não usa HMAC).
 - `Orders.list(params, signal)` em `@nodemelivre/orders` e `Questions.list(params, signal)` em `@nodemelivre/questions`: paginação assíncrona (`for await`) reutilizando `paginate()` do core, com `AbortSignal` opcional — o `for await` rejeita com AbortError sem buscar a página seguinte. `QuestionSearchParams` ganhou `offset`/`limit`; `Questions.list` normaliza a resposta (`questions` → `results`).
 
+### Segurança (auditoria 2026-08-08)
+
+- **`assertValidId` em `@nodemelivre/core`** — valida IDs de recursos antes de interpolá-los no path (`items`, `orders`, `questions`, `users`, `shipments`, `messages`): bloqueia **path traversal** (`../../users/me`), caracteres que alteram a URL (`/`, `?`, `#`, espaço, `..`) e IDs inválidos (NaN, negativos, vazios) com `InputValidationError` — um ID malicioso não consegue mais redirecionar a requisição autenticada para outro endpoint do ML.
+- **`httpUrlSchema` endurecido contra SSRF** — além de http(s), agora rejeita `localhost`, loopback (`127.0.0.0/8`, `::1`), ranges privados (`10/8`, `172.16/12`, `192.168/16`), link-local/metadata de nuvem (`169.254.0.0/16`, `fe80::/10`, `metadata.google.internal`) e **IPv4-mapeado em IPv6** (`::ffff:127.0.0.1` / `::ffff:169.254.169.254` — o WHATWG URL normaliza para hex, decodificado e checado) — aplicado a `Images.uploadFromUrl`.
+- **`HttpClient` não segue redirects cegamente** — `redirect: 'manual'` + resolução e validação de cada hop: apenas mesmo host/subdomínio do baseUrl ou hosts oficiais do ML (`api.mercadolibre.com`, `api.mercadolivre.com.br`), **sem downgrade https→http**, limite de 5 hops (anti-loop). Um `Location` malicioso não recebe o `Authorization` do SDK. 303/301/302 em POST viram GET (spec do fetch).
+- `Questions.reply` valida `question_id` numérico positivo antes de converter — `reply('abc', ...)` lança `InputValidationError` em vez de enviar `question_id: null`.
+
 ### Corrigido
 
 - `Items.searchBySeller`/`listBySeller`: resolução de IDs em itens completos agora respeita um limite de concorrência (10) em vez de `Promise.all` sem cap — evita rajada de requisições que estoura o rate limit em contas com milhares de anúncios.
