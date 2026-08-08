@@ -7,7 +7,7 @@ import {
   RateLimitError,
   toApiError,
 } from '@nodemelivre/errors'
-import { type RateLimiter, MAX_WAIT_MS, rateLimitKey } from './rate-limit.js'
+import { MAX_WAIT_MS, type RateLimiter, rateLimitKey } from './rate-limit.js'
 import {
   DEFAULT_RETRY,
   defaultShouldRetry,
