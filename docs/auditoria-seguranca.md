@@ -16,7 +16,7 @@ Auditoria de segurança complementar ao [DOCUMENTO_CORRECOES.md](../DOCUMENTO_CO
 - **Exposição de segredos** (logs, eventos)
 - Higiene: permissões de arquivo, CSPRNG, CI, segredos no repo
 
-Em **seis rodadas** (auditoria inicial + re-auditoria exaustiva com execução real de experimentos e revisão independente + verificação adicional com revisor independente + auditoria focada em OAuth/PKCE/timing/concorrência + auditoria focada em DoS/erros/payloads + auditoria cega independente com confirmação por execução), foram identificados **24 achados** (1 média-alta, 8 médias, 3 baixa-média, 12 baixos). **22 correções foram implementadas**, 1 item documentado (eventos) e 1 mitigado (temp previsível do `FileTokenStore`). O estado atual é **verde**: 325 testes, lint, typecheck, build e `npm run security:check` (25/25) passando.
+Em **sete rodadas** (auditoria inicial + re-auditoria exaustiva com execução real de experimentos e revisão independente + verificação adicional com revisor independente + auditoria focada em OAuth/PKCE/timing/concorrência + auditoria focada em DoS/erros/payloads + auditoria cega independente com confirmação por execução + auditoria de supply chain/CI), foram identificados **29 achados** (1 média-alta, 8 médias, 3 baixa-média, 17 baixos). **27 correções foram implementadas**, 1 item documentado (eventos) e 1 mitigado (temp previsível do `FileTokenStore`). O estado atual é **verde**: 325 testes, lint, typecheck, build e `npm run security:check` (32/32) passando.
 
 **Veredito:** o SDK estava **acima da média** em higiene (CSPRNG para state, token em arquivo com `0o600`, sem segredos em logs, rate-limit por recurso não-fragmentado). Os vetores com impacto real — path traversal via normalização de URL, bypass de SSRF por trailing dot e perda de token na re-autenticação — foram corrigidos e cobertos por testes.
 
@@ -77,6 +77,16 @@ Em **seis rodadas** (auditoria inicial + re-auditoria exaustiva com execução r
 | 22 | `Authorization` reenviado em redirect cross-origin autorizado (`api.mercadolibre.com` → `api.mercadolivre.com.br`) — fetch nativo removeria o header | 🟢 Baixa | ✅ Corrigido | header dropado quando `next.origin !== url.origin` |
 | 23 | `parallel()` faz pollution local via chave `__proto__` (valor resolvido vira prototype de `data`) | 🟢 Baixa | ✅ Corrigido | `Object.create(null)` para `data` |
 | 24 | `FileTokenStore` cria `.lease`/`.lock` com umask padrão (0644) — token é `0o600`, auxiliares não | 🟢 Baixa | ✅ Corrigido | `mode: 0o600` em lease e lock |
+
+### Rodada 7 — supply chain, scripts npm, build e hardening do CI
+
+| # | Achado | Severidade | Status | Onde |
+|---|--------|------------|--------|------|
+| 25 | `ci.yml` sem `permissions:` — GITHUB_TOKEN com escopos amplos por default | 🟢 Baixa | ✅ Corrigido | `permissions: contents: read` nos jobs |
+| 26 | Workflows sem `timeout-minutes` — job pode rodar indefinidamente (custos/DoS em runner) | 🟢 Baixa | ✅ Corrigido | `timeout-minutes: 15` (ci) / 20 (publish) |
+| 27 | CI não rodava `npm audit` — vulnerabilidades de dependências passavam despercebidas | 🟢 Baixa | ✅ Corrigido | `npm audit --omit=dev --audit-level=high` nos 2 workflows |
+| 28 | Dependências internas `@nodemelivre/*` com `"*"` — não fixam compatibilidade ao publicar | 🟢 Baixa | ✅ Corrigido | `^1.0.0-beta.1` em todos os 14 manifests + lockfile |
+| 29 | Actions do CI por **tag móvel** (`@v4`/`@v5`) — o dono do repo da action pode sobrescrever a tag com outro código (supply chain) | 🟢 Baixa | ✅ Corrigido | pin por SHA (commit imutável) + comentário da versão nos 2 workflows |
 
 ---
 
@@ -445,6 +455,91 @@ Teto `MAX_WAIT_MS = 5 min` (constante documentada) aplicado a qualquer espera ca
 
 ---
 
+## 🟢 ACHADO 25 — `ci.yml` sem `permissions:` (Rodada 7)
+
+### Localização
+```
+.github/workflows/ci.yml — jobs.validate
+```
+
+### Descrição do Problema
+O workflow não declarava `permissions:`. Por default o `GITHUB_TOKEN` recebe escopos amplos do repositório (ex.: `contents: write` para o próprio repo) mesmo quando o CI só lê código e roda testes — superfície desnecessária: um passo comprometido (ex.: dependência maliciosa em um script) teria o token com permissões de escrita.
+
+### Correção Implementada
+`permissions: contents: read` nos dois jobs (`validate` e `conventional-commits`); `publish-beta.yml` mantém `packages: write` (necessário para publicar) mas restringe `contents: read`. Checagem estática no `security:check` impede regressão.
+
+---
+
+## 🟢 ACHADO 26 — Workflows sem `timeout-minutes` (Rodada 7)
+
+### Localização
+```
+.github/workflows/ci.yml e publish-beta.yml
+```
+
+### Descrição do Problema
+Jobs sem timeout podem rodar indefinidamente — um teste que trava (ex.: espera de rede sem teto) consome o runner e o orçamento do repo indefinidamente.
+
+### Correção Implementada
+`timeout-minutes: 15` no `ci.yml` (validate e conventional-commits) e `20` no `publish-beta.yml` (build + publish de 14 pacotes).
+
+---
+
+## 🟢 ACHADO 27 — CI sem `npm audit` (Rodada 7)
+
+### Localização
+```
+.github/workflows/ci.yml e publish-beta.yml
+```
+
+### Descrição do Problema
+Nenhum workflow rodava `npm audit` — vulnerabilidades em dependências (transitivas inclusive) passavam despercebidas no CI (na prática, a árvore atual está limpa: `npm audit --omit=dev` → 0 vulnerabilidades).
+
+### Correção Implementada
+Step `npm audit --omit=dev --audit-level=high` em ambos os workflows, após `npm ci` (produção; devDependencies ficam de fora por serem de tooling). Falha fecha o PR com exit code 1.
+
+---
+
+## 🟢 ACHADO 28 — Dependências internas com `"*"` (Rodada 7)
+
+### Localização
+```
+packages/*/package.json — dependencies (@nodemelivre/*)
+```
+
+### Descrição do Problema
+Todas as dependências internas usavam `"*"`. Em monorepo funciona (workspace resolve local), mas **ao publicar** o `"*"` não fixa compatibilidade: um consumidor que instale `@nodemelivre/auth` isolado receberia a versão mais recente de `@nodemelivre/core` — sem garantia de quebrou a API entre releases.
+
+### Correção Implementada
+Todos os manifests usam `^1.0.0-beta.1` (range compatível com a versão atual, fixando o mínimo). Lockfile atualizado (`npm install --package-lock-only`) e resolução de workspaces confirmada (`npm ls` → deduped local). Checagem estática no `security:check` impede a volta de `"*"`.
+
+---
+
+## 🟢 ACHADO 29 — Actions do CI por tag móvel (Rodada 7)
+
+### Localização
+```
+.github/workflows/ci.yml — actions/checkout, actions/setup-node
+.github/workflows/publish-beta.yml — idem
+```
+
+### Descrição do Problema
+Os workflows referenciavam as actions por **tag semântica móvel** (`actions/checkout@v4`, `actions/setup-node@v5`). Tags como `v4` são re-escritas pelo dono do repo da action para apontar para novos commits — um atacante que comprometa o repo da action (ou o dono publique código malicioso sob a mesma tag) substituiria o código que o CI executa **sem mudança nenhuma no workflow** do projeto. O mesmo princípio de imutabilidade aplicado a dependências npm (`npm ci` + lockfile) deve valer para as actions.
+
+### Correção Implementada
+Todas as `uses:` apontam para **SHA de commit** (imutável) com comentário da versão legível:
+
+| Action | SHA pinado | Versão |
+|---|---|---|
+| `actions/checkout` (ci) | `11d5960a326750d5838078e36cf38b85af677262` | v4 |
+| `actions/setup-node` (ci) | `49933ea5288caeca8642d1e84afbd3f7d6820020` | v4 |
+| `actions/checkout` (publish) | `fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09` | v5 |
+| `actions/setup-node` (publish) | `a0853c24544627f65ddf259abe73b1d18a591444` | v5 |
+
+Os SHAs foram resolvidos via GitHub API (todos apontam para `type: commit`, não tag anotada). Checagem estática no `security:check` (item 23) rejeita qualquer `uses: owner/repo@vN` futuro.
+
+---
+
 ## 🔴 ACHADO 19 — Origin escape no `buildUrl` (Rodada 6)
 
 ### Localização
@@ -564,8 +659,8 @@ Para impedir regressão dos vetores corrigidos, o monorepo tem `npm run security
 
 | Estágio | Cobre |
 |---|---|
-| **1. Estático** (scan) | segredos hardcoded em `packages/*/src`; APIs removidas não podem ressurgir (`assertValidItemInput`, `getGlobalOAuthStateStore`, `resetGlobalOAuthStateStore`, `securityHeaders`, `SECURITY_HEADERS`); `Math.random` em código do auth (CSPRNG); chaves `__proto__`/`constructor`/`prototype` fora do `UNSAFE_KEYS`; presença dos fixes: trailing dot no `httpUrlSchema` (Rodada 3), `sanitizeLog` com NEL/DEL (Rodadas 2-3), `randomBytes` no instanceId e limite do fallback de `code_verifier` (Rodada 4), `ApiError.message` sanitizado (Rodada 3), `deepOmitEmpty` iterativo, guard de página repetida no `paginate` e `MAX_WAIT_MS` no rate limit (Rodada 5), origin guard no `buildUrl`, drop de Authorization cross-origin, cap do `Retry-After`, DNS wildcard e IPv6 transition no `httpUrlSchema`, `Object.create(null)` no `parallel`, `0o600` no lease/lock (Rodada 6) |
-| **2. Dinâmico** | executa os 14 arquivos de teste de segurança (schemas, http client/integration, utils, webhooks, errors, refresh/oauth, questions, items, pagination, rate-limit, resilience, token) — 25/25 checagens |
+| **1. Estático** (scan) | segredos hardcoded em `packages/*/src`; APIs removidas não podem ressurgir (`assertValidItemInput`, `getGlobalOAuthStateStore`, `resetGlobalOAuthStateStore`, `securityHeaders`, `SECURITY_HEADERS`); `Math.random` em código do auth (CSPRNG); chaves `__proto__`/`constructor`/`prototype` fora do `UNSAFE_KEYS`; presença dos fixes: trailing dot no `httpUrlSchema` (Rodada 3), `sanitizeLog` com NEL/DEL (Rodadas 2-3), `randomBytes` no instanceId e limite do fallback de `code_verifier` (Rodada 4), `ApiError.message` sanitizado (Rodada 3), `deepOmitEmpty` iterativo, guard de página repetida no `paginate` e `MAX_WAIT_MS` no rate limit (Rodada 5), origin guard no `buildUrl`, drop de Authorization cross-origin, cap do `Retry-After`, DNS wildcard e IPv6 transition no `httpUrlSchema`, `UNSAFE_KEYS` no `parallel`, `0o600` no lease/lock (Rodada 6); supply chain/CI: dependências internas com versão real (sem `"*"`), `permissions` mínimas nos workflows, `npm audit` e `security:check` no CI, `timeout-minutes`, actions pinadas por SHA (Rodada 7) |
+| **2. Dinâmico** | executa os 14 arquivos de teste de segurança (schemas, http client/integration, utils, webhooks, errors, refresh/oauth, questions, items, pagination, rate-limit, resilience, token) — 32/32 checagens |
 
 `npm run security:static` roda apenas o estágio 1 (mais rápido para desenvolvimento). Uma violação falha o CI com exit code 1.
 
@@ -593,7 +688,7 @@ Para impedir regressão dos vetores corrigidos, o monorepo tem `npm run security
 | 🔴 Média-Alta | Path traversal (1) | ✅ Corrigido |
 | 🟡 Média | SSRF trailing dot (10), Log injection webhooks (6), Re-auth perde token (13), `deepOmitEmpty` stack overflow (16), `paginate` loop infinito (17), `RateLimiter` espera gigante (18), Origin escape no `buildUrl` (19), DNS wildcard (20) | ✅ Corrigido |
 | 🟡 Baixa-Média | SSRF no schema (2), Redirects (3), IPv6 transition (21) | ✅ Corrigido |
-| 🟢 Baixa | `reply` NaN (4), Eventos (5), Prototype (7), API IDs (8), temp previsível (9), `ApiError.message` (11), NEL/DEL (12), instanceId previsível (14), code_verifier leak (15), Authorization cross-origin (22), `parallel` `__proto__` (23), permissões lease/lock (24) | ✅ Corrigido / 📚 Documentado |
+| 🟢 Baixa | `reply` NaN (4), Eventos (5), Prototype (7), API IDs (8), temp previsível (9), `ApiError.message` (11), NEL/DEL (12), instanceId previsível (14), code_verifier leak (15), Authorization cross-origin (22), `parallel` `__proto__` (23), permissões lease/lock (24), CI sem permissions (25), sem timeout (26), sem npm audit (27), deps com `"*"` (28), actions por tag móvel (29) | ✅ Corrigido / 📚 Documentado |
 
 ---
 
@@ -608,4 +703,4 @@ Para impedir regressão dos vetores corrigidos, o monorepo tem `npm run security
 
 ---
 
-*Auditoria baseada em leitura dos 14 pacotes (src + testes), execução real de experimentos para confirmação dos vetores (URL parser na Rodada 3; refresh/re-auth/PKCE na Rodada 4; deepOmitEmpty/paginate/rate-limit na Rodada 5; buildUrl/redirect/DNS/IPv6/parallel/permissões na Rodada 6 — auditada por analista independente), e validação final com 325 testes, lint, typecheck, build e `npm run security:check` (25/25) verdes (Rodadas 1–2 no commit `3ae58fb`; Rodada 3 no commit `2aa5ed0`; Rodada 4 no commit `506d6c8`).*
+*Auditoria baseada em leitura dos 14 pacotes (src + testes), execução real de experimentos para confirmação dos vetores (URL parser na Rodada 3; refresh/re-auth/PKCE na Rodada 4; deepOmitEmpty/paginate/rate-limit na Rodada 5; buildUrl/redirect/DNS/IPv6/parallel/permissões na Rodada 6 — auditada por analista independente; lockfile/npm audit/workflows na Rodada 7), e validação final com 325 testes, lint, typecheck, build e `npm run security:check` (32/32) verdes (Rodadas 1–2 no commit `3ae58fb`; Rodada 3 no commit `2aa5ed0`; Rodada 4 no commit `506d6c8`; Rodadas 5-6 no commit `976e710`).*

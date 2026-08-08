@@ -27,8 +27,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@nodemelivre/errors": "*",
-    "@nodemelivre/types": "*"
+    "@nodemelivre/errors": "^1.0.0-beta.1",
+    "@nodemelivre/types": "^1.0.0-beta.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0"

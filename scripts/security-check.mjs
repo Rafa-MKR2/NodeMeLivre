@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * security:check — verificação automatizada dos vetores-chave das 6 rodadas
+ * security:check — verificação automatizada dos vetores-chave das 7 rodadas
  * da auditoria de segurança (docs/auditoria-seguranca.md).
  *
  * Zero dependências: roda com Node puro + vitest (já devDependency).
@@ -71,7 +71,7 @@ function stripComments(content) {
     .join('\n')
 }
 
-console.log('🔒 security:check — vetores das 6 rodadas da auditoria\n')
+console.log('🔒 security:check — vetores das 7 rodadas da auditoria\n')
 
 // ────────────────────────────────────────────────────────────────────────────
 // ESTÁTICO — regressões que um teste unitário não pega (grep/scan)
@@ -296,6 +296,89 @@ console.log('Estágio 1 — varredura estática (padrões proibidos)\n')
   report('FileTokenStore com 0o600 no lease/lock (Rodada 6)', occurrences >= 5)
 }
 
+// 19. Dependências internas com versão real (Rodada 7, supply chain):
+//    `"@nodemelivre/*": "*"` é anti-padrão ao publicar — o `*` não fixa
+//    compatibilidade e pode resolver qualquer versão publicada.
+{
+  let hits = []
+  for (const pkg of readdirSync(SRC)) {
+    if (IGNORED_DIRS.has(pkg) || pkg.startsWith('.')) continue
+    const manifestPath = join(SRC, pkg, 'package.json')
+    if (!statSync(manifestPath, { throwIfNoEntry: false })) continue
+    const manifest = readFileSync(manifestPath, 'utf8')
+    const matches = manifest.matchAll(/"(@nodemelivre\/[a-z-]+)"\s*:\s*"\*"/g)
+    for (const m of matches) hits.push(`${pkg}: ${m[1]}`)
+  }
+  report(
+    'dependências @nodemelivre/* com versão real (sem "*") (Rodada 7)',
+    hits.length === 0,
+    hits.slice(0, 5).join(', '),
+  )
+}
+
+// 20. CI com permissions mínimas (Rodada 7, hardening): GITHUB_TOKEN
+//    ilimitado por default — o workflow deve declarar `permissions: read`.
+{
+  const ci = join(ROOT, '.github', 'workflows', 'ci.yml')
+  const publish = join(ROOT, '.github', 'workflows', 'publish-beta.yml')
+  const ciContent = readFileSync(ci, 'utf8')
+  const publishContent = readFileSync(publish, 'utf8')
+  report(
+    'ci.yml com permissions mínimas (Rodada 7)',
+    ciContent.includes('permissions:') && ciContent.includes('contents: read'),
+  )
+  report(
+    'publish-beta.yml com permissions mínimas (Rodada 7)',
+    publishContent.includes('permissions:') &&
+      publishContent.includes('contents: read') &&
+      publishContent.includes('packages: write'),
+  )
+}
+
+// 21. CI roda npm audit e security:check (Rodada 7, supply chain)
+{
+  const ci = join(ROOT, '.github', 'workflows', 'ci.yml')
+  const content = readFileSync(ci, 'utf8')
+  report(
+    'ci.yml roda npm audit (Rodada 7)',
+    content.includes('npm audit --omit=dev'),
+  )
+  report(
+    'ci.yml roda security:check (Rodada 7)',
+    content.includes('npm run security:check'),
+  )
+}
+
+// 22. CI com timeout (Rodada 7, hardening): job sem timeout pode rodar
+//    indefinidamente (custos/DoS em runners compartilhados).
+{
+  const ci = join(ROOT, '.github', 'workflows', 'ci.yml')
+  const content = readFileSync(ci, 'utf8')
+  report('ci.yml com timeout-minutes (Rodada 7)', content.includes('timeout-minutes:'))
+}
+
+// 23. Actions pinadas por SHA (Rodada 7, hardening): tag móvel (@vN) pode ser
+//    sobrescrita pelo dono do repo — o CI deve apontar para um commit imutável
+//    (40 hex chars) com comentário da versão.
+{
+  const workflows = join(ROOT, '.github', 'workflows')
+  let hits = []
+  for (const file of readdirSync(workflows)) {
+    if (!file.endsWith('.yml') && !file.endsWith('.yaml')) continue
+    const content = readFileSync(join(workflows, file), 'utf8')
+    const matches = content.matchAll(/uses:\s*([^\s#]+)/g)
+    for (const m of matches) {
+      const version = m[1].split('@')[1]
+      if (version && !/^[0-9a-f]{40}$/i.test(version)) hits.push(`${file}: ${m[1]}`)
+    }
+  }
+  report(
+    'actions pinadas por SHA (sem tag móvel @vN) (Rodada 7)',
+    hits.length === 0,
+    hits.slice(0, 5).join(', '),
+  )
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // DINÂMICO — executa os testes que cobrem cada vetor
 // ────────────────────────────────────────────────────────────────────────────
@@ -360,4 +443,4 @@ if (failures > 0) {
   console.error(`❌ security:check FALHOU (${failures} violação(ões))`)
   process.exit(1)
 }
-console.log('✅ security:check — todos os vetores das 6 rodadas verificados')
+console.log('✅ security:check — todos os vetores das 7 rodadas verificados')

@@ -23,19 +23,19 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@nodemelivre/auth": "*",
-    "@nodemelivre/core": "*",
-    "@nodemelivre/errors": "*",
-    "@nodemelivre/http": "*",
-    "@nodemelivre/images": "*",
-    "@nodemelivre/items": "*",
-    "@nodemelivre/messages": "*",
-    "@nodemelivre/orders": "*",
-    "@nodemelivre/questions": "*",
-    "@nodemelivre/shipments": "*",
-    "@nodemelivre/types": "*",
-    "@nodemelivre/users": "*",
-    "@nodemelivre/webhooks": "*"
+    "@nodemelivre/auth": "^1.0.0-beta.1",
+    "@nodemelivre/core": "^1.0.0-beta.1",
+    "@nodemelivre/errors": "^1.0.0-beta.1",
+    "@nodemelivre/http": "^1.0.0-beta.1",
+    "@nodemelivre/images": "^1.0.0-beta.1",
+    "@nodemelivre/items": "^1.0.0-beta.1",
+    "@nodemelivre/messages": "^1.0.0-beta.1",
+    "@nodemelivre/orders": "^1.0.0-beta.1",
+    "@nodemelivre/questions": "^1.0.0-beta.1",
+    "@nodemelivre/shipments": "^1.0.0-beta.1",
+    "@nodemelivre/types": "^1.0.0-beta.1",
+    "@nodemelivre/users": "^1.0.0-beta.1",
+    "@nodemelivre/webhooks": "^1.0.0-beta.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0"

@@ -10,16 +10,22 @@ jobs:
   validate:
     name: Lint, typecheck, teste e build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
 
       - name: Instalar dependências
         run: npm ci
+
+      - name: Auditoria de dependências (npm audit)
+        run: npm audit --omit=dev --audit-level=high
 
       - name: Lint
         run: npm run lint
@@ -30,7 +36,7 @@ jobs:
       - name: Testes
         run: npm run test
 
-      - name: Segurança (vetores das 6 rodadas da auditoria)
+      - name: Segurança (vetores das 7 rodadas da auditoria)
         run: npm run security:check
 
       - name: Build
@@ -39,8 +45,11 @@ jobs:
   conventional-commits:
     name: Validar Conventional Commits
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
       - name: Validar mensagens de commit
