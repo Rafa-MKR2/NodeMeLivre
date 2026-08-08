@@ -1,7 +1,13 @@
 import { EventEmitter } from 'node:events'
 import { type Logger, silentLogger } from '@nodemelivre/core'
-import { ApiError, NetworkError, RateLimitError, toApiError } from '@nodemelivre/errors'
-import { type RateLimiter, rateLimitKey } from './rate-limit.js'
+import {
+  ApiError,
+  InputValidationError,
+  NetworkError,
+  RateLimitError,
+  toApiError,
+} from '@nodemelivre/errors'
+import { type RateLimiter, MAX_WAIT_MS, rateLimitKey } from './rate-limit.js'
 import {
   DEFAULT_RETRY,
   defaultShouldRetry,
@@ -289,6 +295,17 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
         )
       }
 
+      // Redirect cross-origin não carrega o Authorization (spec do fetch): o
+      // token só vale para o origin original da requisição — um `Location`
+      // para outro host autorizado (ex.: api.mercadolivre.com.br vindo de
+      // api.mercadolibre.com, ou subdomínio de um baseUrl próprio) não deve
+      // receber o Bearer do integrador.
+      if (next.origin !== url.origin && currentHeaders.has('authorization')) {
+        const fresh = new Headers(currentHeaders)
+        fresh.delete('authorization')
+        currentHeaders = fresh
+      }
+
       // 303 sempre vira GET; 301/302 em POST vira GET (spec do fetch).
       // HEAD é preservado em 303; 307/308 preservam método e corpo.
       if (
@@ -348,13 +365,27 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
 
   private backoffDelay(attempt: number, error: ApiError): number {
     if (error instanceof RateLimitError && error.retryAfterSeconds !== undefined) {
-      return error.retryAfterSeconds * 1000
+      // Teto na espera por Retry-After: um header corrompido/gateway com valor
+      // no futuro distante faria o SDK dormir dias (mesmo DoS de espera que o
+      // `MAX_WAIT_MS` do RateLimiter fecha — Rodada 5; aqui no caminho de retry).
+      return Math.min(error.retryAfterSeconds * 1000, MAX_WAIT_MS)
     }
     return exponentialBackoff(attempt, this.retry)
   }
 }
 
 function buildUrl(baseUrl: string, path: string, query: HttpClientRequest['query']): URL {
+  // Guard de origem (Rodada 6): o path DEVE ser relativo ao baseUrl. Um path
+  // absoluto (`https://evil.com/x`) ou protocol-relative (`//evil.com/x`)
+  // faria o `new URL` pular para outro origin — levando o Authorization do
+  // integrador junto (confused deputy: o chamador acha que fala com o ML).
+  // As resources tipadas já bloqueiam via assertValidId; esta é a defesa
+  // para `ml.http.*` (API pública) e qualquer path não validado.
+  if (path.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(path)) {
+    throw new InputValidationError(
+      'path deve ser relativo ao baseUrl (sem protocolo nem host) — use ex.: /items/MLB1',
+    )
+  }
   const url = new URL(path, baseUrl)
   for (const [name, value] of Object.entries(query ?? {})) {
     if (value !== undefined) {

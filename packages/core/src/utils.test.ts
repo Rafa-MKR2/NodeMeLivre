@@ -101,6 +101,23 @@ describe('deepOmitEmpty', () => {
     expect(JSON.stringify(empty)).not.toContain('polluted')
     expect(JSON.stringify(undef)).not.toContain('polluted')
   })
+
+  it('não estoura a pilha com profundidade extrema (anti-DoS, Rodada 5)', () => {
+    // Input do usuário pode ter profundidade arbitrária; a versão recursiva
+    // lançava RangeError (~10k frames) e derrubava o processo do integrador.
+    let nested: unknown = { leaf: 1 }
+    for (let i = 0; i < 50_000; i++) nested = { a: nested }
+
+    let result: unknown
+    expect(() => {
+      result = deepOmitEmpty(nested)
+    }).not.toThrow()
+    expect(typeof result).toBe('object')
+
+    let nestedArr: unknown[] = [1]
+    for (let i = 0; i < 50_000; i++) nestedArr = [nestedArr]
+    expect(() => deepOmitEmpty(nestedArr)).not.toThrow()
+  })
 })
 
 describe('mapWithConcurrency', () => {

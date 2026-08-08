@@ -21,6 +21,14 @@ const RATE_LIMIT_HEADERS = {
   reset: 'x-rate-limit-reset',
 } as const
 
+/**
+ * Teto da espera por rate limit (5 min). Um `x-rate-limit-reset` no futuro
+ * distante (header corrompido/gateway/atacante) faria o SDK dormir dias —
+ * DoS de espera confirmado por execução (Rodada 5). Com o teto, a espera
+ * nunca passa de 5 min por janela.
+ */
+export const MAX_WAIT_MS = 5 * 60 * 1000
+
 function parsePositive(raw: string | null): number | undefined {
   if (raw === null) return undefined
   const value = Number(raw)
@@ -95,11 +103,15 @@ export class RateLimiter {
     if (state.remaining !== undefined && state.remaining > 0) return
 
     const resetAt = state.resetAt ?? 0
-    const delayMs = resetAt - Date.now()
+    let delayMs = resetAt - Date.now()
     if (delayMs <= 0) {
       // Janela já expirou; limpa o estado para não bloquear à toa.
       this.states.delete(key)
       return
+    }
+    if (delayMs > MAX_WAIT_MS) {
+      // Reset suspeito (muito no futuro): espera no máximo o teto.
+      delayMs = MAX_WAIT_MS
     }
 
     // Single-flight: chamadas concorrentes no mesmo recurso esgotado

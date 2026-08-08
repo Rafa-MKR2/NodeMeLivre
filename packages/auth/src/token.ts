@@ -302,6 +302,7 @@ export class FileTokenStore implements TokenStore {
       // Escreve novo lease
       await writeFile(this.leasePath, JSON.stringify({ holderId: options.holderId, expiresAt }), {
         encoding: 'utf8',
+        mode: 0o600,
       })
 
       const token = await this.getWithVersionUnlocked()
@@ -329,7 +330,10 @@ export class FileTokenStore implements TokenStore {
 
       if (currentLease && currentLease.holderId === holderId && currentLease.expiresAt > now) {
         currentLease.expiresAt = now + ttlMs
-        await writeFile(this.leasePath, JSON.stringify(currentLease), { encoding: 'utf8' })
+        await writeFile(this.leasePath, JSON.stringify(currentLease), {
+          encoding: 'utf8',
+          mode: 0o600,
+        })
         return true
       }
       return false
@@ -362,7 +366,11 @@ export class FileTokenStore implements TokenStore {
     let fd: FileHandle
     while (true) {
       try {
-        fd = await open(this.lockPath, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY)
+        fd = await open(
+          this.lockPath,
+          constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY,
+          0o600,
+        )
         return fd
       } catch (error: unknown) {
         if (error instanceof Error && 'code' in error && error.code === 'EEXIST') {

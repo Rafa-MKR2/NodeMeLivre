@@ -1,5 +1,11 @@
 import { json, mockFetch, restoreFetch } from '@nodemelivre/core/test-utils'
-import { ApiError, NetworkError, RateLimitError, UnauthorizedError } from '@nodemelivre/errors'
+import {
+  ApiError,
+  InputValidationError,
+  NetworkError,
+  RateLimitError,
+  UnauthorizedError,
+} from '@nodemelivre/errors'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HttpClient, type HttpClientOptions, type TokenProvider } from './client.js'
 
@@ -181,6 +187,29 @@ describe('HttpClient.request', () => {
     expect(err).toBeInstanceOf(RateLimitError)
   })
 
+  it('não dorme dias com Retry-After gigante (cap no backoff)', async () => {
+    const delays: number[] = []
+    mockFetch(() => ({
+      status: 429,
+      headers: { 'retry-after': '999999' },
+      body: undefined,
+    }))
+
+    await client({
+      delay: async (ms) => {
+        delays.push(ms)
+      },
+    })
+      .get('/items/MLB1')
+      .catch(() => {})
+
+    // 3 tentativas (2 retries) — cada backoff capped em MAX_WAIT_MS (5 min).
+    expect(delays).toHaveLength(2)
+    for (const d of delays) {
+      expect(d).toBeLessThanOrEqual(5 * 60 * 1000)
+    }
+  })
+
   it('deve lançar ApiError em 400 sem retry', async () => {
     const spy = mockFetch(() => json({ message: 'bad request' }, 400))
     const err = await client()
@@ -188,6 +217,22 @@ describe('HttpClient.request', () => {
       .catch((e) => e)
     expect(err).toBeInstanceOf(ApiError)
     expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+  it('deve rejeitar path absoluto ou protocol-relative (guard de origem)', async () => {
+    const spy = mockFetch(() => json({ ok: true }))
+
+    const err1 = await client({ auth: provider('token-123') })
+      .get('https://evil.com/y')
+      .catch((e) => e)
+    expect(err1).toBeInstanceOf(InputValidationError)
+
+    const err2 = await client({ auth: provider('token-123') })
+      .get('//evil.example.com/x')
+      .catch((e) => e)
+    expect(err2).toBeInstanceOf(InputValidationError)
+
+    expect(spy).not.toHaveBeenCalled() // o token nunca sai do processo
   })
 
   it('deve lançar NetworkError em falha de rede e não repetir POST', async () => {
@@ -261,6 +306,48 @@ describe('HttpClient — redirecionamentos seguros', () => {
     expect(result.ok).toBe(true)
     // 1 chamada no /antigo + 1 no /novo
     expect(spy).toHaveBeenCalledTimes(2)
+  })
+
+  it('não reenvia Authorization em redirect cross-origin autorizado', async () => {
+    const seenAuth: Array<string | null> = []
+    const spy = mockFetch((url, init) => {
+      const headers = new Headers(init.headers)
+      seenAuth.push(headers.get('authorization'))
+      if (url.pathname === '/antigo') {
+        return {
+          status: 302,
+          headers: { location: 'https://api.mercadolivre.com.br/final' },
+          body: undefined,
+        }
+      }
+      return json({ ok: true })
+    })
+
+    await client({ auth: provider('SECRET_TOKEN'), retry: { maxRetries: 0 } }).get('/antigo')
+
+    // O Bearer vai na origem (api.mercadolibre.com) e é removido no hop
+    // cross-origin (api.mercadolivre.com.br) — comportamento do fetch.
+    expect(seenAuth).toEqual(['Bearer SECRET_TOKEN', null])
+    expect(spy).toHaveBeenCalledTimes(2)
+  })
+
+  it('mantém o Authorization em redirect same-origin', async () => {
+    const seenAuth: Array<string | null> = []
+    mockFetch((url, init) => {
+      const headers = new Headers(init.headers)
+      seenAuth.push(headers.get('authorization'))
+      if (url.pathname === '/antigo') {
+        return {
+          status: 302,
+          headers: { location: '/novo' },
+          body: undefined,
+        }
+      }
+      return json({ ok: true })
+    })
+
+    await client({ auth: provider('SECRET_TOKEN'), retry: { maxRetries: 0 } }).get('/antigo')
+    expect(seenAuth).toEqual(['Bearer SECRET_TOKEN', 'Bearer SECRET_TOKEN'])
   })
 
   it('bloqueia redirect para host não autorizado', async () => {

@@ -152,8 +152,14 @@ await writeFile('etiqueta.pdf', Buffer.from(pdf))
 ## Exemplos prontos
 
 ```bash
+# Primeiro passo — OAuth2 ponta a ponta + resources
+npx tsx examples/quickstart.ts
+
 # Autenticação + token em arquivo
 npx tsx examples/file-token-store.ts
+
+# Retry, timeout e rate-limit
+npx tsx examples/retry-and-rate-limit.ts
 
 # Upload de imagem + anúncio com variações
 npx tsx examples/upload-e-variacoes.ts

@@ -1,6 +1,6 @@
 # Processo de release
 
-Fluxo para publicar novas versões dos pacotes do NodeMeLivre. Segue o padrão do [MANUAL-DAS-BOAS-PRATICAS](../docs/decisions/) e usa [SemVer](https://semver.org/lang/pt-BR/).
+Fluxo para publicar novas versões dos pacotes do NodeMeLivre. Segue o padrão do [MANUAL-DAS-BOAS-PRATICAS](https://github.com/rafaeldc/MANUAL-DAS-BOAS-PRATICAS) e usa [SemVer](https://semver.org/lang/pt-BR/).
 
 ## Regras
 
@@ -24,7 +24,7 @@ A dependência entre pacotes define a ordem:
 ## Passos
 
 1. Bump de versão nos `package.json` afetados e na raiz do monorepo.
-2. `npm run lint`, `npm run typecheck`, `npm run test`, `npm run build` — todos verdes.
+2. `npm run lint`, `npm run typecheck`, `npm run test`, `npm run security:check`, `npm run build` — todos verdes.
 3. Atualizar `CHANGELOG.md` com a seção da nova versão.
 4. Marcar a versão no `docs/roadmap/README.md`.
 5. Publicar na ordem acima (`npm publish --workspace @nodemelivre/<pkg>`) quando aplicável.

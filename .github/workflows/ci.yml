@@ -30,6 +30,9 @@ jobs:
       - name: Testes
         run: npm run test
 
+      - name: Segurança (vetores das 6 rodadas da auditoria)
+        run: npm run security:check
+
       - name: Build
         run: npm run build
 

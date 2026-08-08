@@ -8,7 +8,7 @@ ADRs registram **por que** tomamos cada decisão de arquitetura do SDK.
 - Numeração sequencial: `NNNN-descricao-curta.md`.
 - Para revisar ou reverter uma decisão, crie uma **nova ADR** — nunca edite uma ADR aceita (apenas adicione status "superseded").
 - Estados possíveis: `Proposta` → `Aceita` → `Superseded` / `Rejeitada`.
-- O template segue o [MANUAL-DAS-BOAS-PRATICAS](../../../MANUAL-DAS-BOAS-PRATICAS/docs/decisions/0000-template.md).
+- O template segue o [MANUAL-DAS-BOAS-PRATICAS](https://github.com/rafaeldc/MANUAL-DAS-BOAS-PRATICAS) (`docs/decisions/0000-template.md`).
 
 ## ADRs deste projeto
 

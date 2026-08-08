@@ -29,10 +29,11 @@ docs(readme): atualiza instruções de instalação
 ## Verificações antes do PR
 
 ```bash
-npm run lint       # Biome
-npm run typecheck  # tsc strict
-npm run test       # Vitest
-npm run build      # tsc build
+npm run lint            # Biome
+npm run typecheck       # tsc strict
+npm run test            # Vitest
+npm run security:check  # vetores das 4 rodadas da auditoria
+npm run build           # tsc build
 ```
 
 ## Definition of Done

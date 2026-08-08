@@ -8,7 +8,9 @@
 | [roadmap/](roadmap/README.md) | Roadmap, prioridades e Definition of Done |
 | [releases/](releases/README.md) | Processo de release e CHANGELOG |
 | [github-packages.md](github-packages.md) | Publicação e instalação via GitHub Packages |
-| [auditoria-seguranca.md](auditoria-seguranca.md) | Auditoria de segurança — 4 rodadas, 15 achados / 13 corrigidos (path traversal, SSRF + trailing dot, redirects, log injection, prototype pollution, OAuth/re-auth) |
+| [auditoria-seguranca.md](auditoria-seguranca.md) | Auditoria de segurança — 6 rodadas, 24 achados / 22 corrigidos (path traversal, SSRF + trailing dot + DNS wildcard + IPv6 transition, redirects + origin guard, log injection, prototype pollution, OAuth/re-auth, DoS: stack overflow, loop de paginação, espera de rate limit/retry) |
+| [ANALISE_QUALIDADE_TECNICA.md](../ANALISE_QUALIDADE_TECNICA.md) | Análise arquitetural, duplicação e plano de refatoração (fases) |
+| [DOCUMENTO_CORRECOES.md](../DOCUMENTO_CORRECOES.md) | Correções críticas P0/P1/P2 (estado, PKCE, atomicidade) |
 
 ## Regra de ouro
 

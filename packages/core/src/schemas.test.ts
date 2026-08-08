@@ -128,6 +128,23 @@ describe('Schemas genéricos do core', () => {
       'http://metadata./x',
       'http://metadata.google.internal./x',
       'http://127.0.0.1./x',
+      // DNS wildcard público que resolve para IPs locais (Rodada 6)
+      'http://127.0.0.1.nip.io/x',
+      'http://localhost.nip.io/x',
+      'http://sslip.io/x',
+      'http://1.2.3.4.sslip.io/x',
+      'http://localtest.me/x',
+      'http://foo.localtest.me/x',
+      'http://xip.io/x',
+      'http://127.0.0.1.xip.io/x',
+      'http://lvh.me/x',
+      'http://vcap.me/x',
+      // Mecanismos de transição IPv6 que embutem IPv4 local (Rodada 6)
+      'http://[64:ff9b::127.0.0.1]/x', // NAT64 WKP dotted
+      'http://[64:ff9b::7f00:1]/x', // NAT64 WKP hex (forma normalizada)
+      'http://[2002:7f00:1::]/x', // 6to4 → 127.0.0.1
+      'http://[2002:a00:1::]/x', // 6to4 → 10.0.0.1 (privado)
+      'http://[::7f00:1]/x', // IPv4-compatível → 127.0.0.1
     ]
     for (const url of blocked) {
       expect(httpUrlSchema.check(url)).toEqual([
@@ -137,6 +154,8 @@ describe('Schemas genéricos do core', () => {
     // Hosts públicos seguem válidos.
     expect(httpUrlSchema.check('https://img.example.com/foto.jpg')).toEqual([])
     expect(httpUrlSchema.check('https://s3.amazonaws.com/x.png')).toEqual([])
+    // IPv6 legítimo (Google DNS) continua aceito.
+    expect(httpUrlSchema.check('http://[2001:4860:4860::8888]/x')).toEqual([])
   })
 
   it('nonEmptyFileSchema rejeita Blob vazio', () => {

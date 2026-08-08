@@ -64,19 +64,45 @@ export async function* paginate<T>(
   const limit = options.limit ?? 50
   let offset = options.offset ?? 0
   const signal = options.signal
+  // Detecção de página que não avança (API ignorando `offset`): se a página
+  // atual tem o mesmo primeiro item da anterior, o loop nunca terminaria —
+  // interrompe para evitar requisições infinitas (DoS do integrador).
+  let previousFirstKey: string | undefined
 
   while (true) {
     signal?.throwIfAborted()
     const page = await fetchPage(offset, limit, signal)
     const results = page.results
+
+    const total = page.paging.total
+    if (total !== null && offset + results.length >= total) {
+      // Última página: entrega os itens e encerra.
+      for (const item of results) {
+        signal?.throwIfAborted()
+        yield item
+      }
+      return
+    }
+    if (results.length === 0) return
+
+    // Detecção de página que não avança (API ignorando `offset`): a página
+    // atual começa com o mesmo item da anterior — antes de entregar os itens
+    // repetidos, interrompe para evitar requisições infinitas (DoS do
+    // integrador).
+    //
+    // Comparação por JSON completo do primeiro item (escolha pragmática:
+    // `paginate` é genérico e não conhece campos de ID). Um falso positivo
+    // exigiria o mesmo primeiro item repetido entre páginas consecutivas —
+    // na prática só ocorre com overlap genuíno (parar é o comportamento
+    // correto), e o `paging.total` autoritativo é checado antes.
+    const firstKey = JSON.stringify(results[0])
+    if (firstKey !== undefined && firstKey === previousFirstKey) return
+    previousFirstKey = firstKey
+
     for (const item of results) {
       signal?.throwIfAborted()
       yield item
     }
-
-    const total = page.paging.total
-    if (total !== null && offset + results.length >= total) return
-    if (results.length === 0) return
     offset += results.length
   }
 }

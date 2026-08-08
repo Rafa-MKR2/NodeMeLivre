@@ -44,29 +44,103 @@ export function omitEmpty<T extends object>(obj: T): Partial<T> {
  * `null` é **preservado**: na API do Mercado Livre, enviar `null` é a forma
  * de limpar/desativar um campo (ex.: remover um atributo em `PUT /items`).
  * Apenas objetos que ficam vazios após a limpeza recursiva são omitidos.
+ *
+ * Implementação **iterativa** (pilha explícita): input do usuário pode ter
+ * profundidade arbitrária, e a versão recursiva estoura a pilha do V8
+ * (~10k frames → `RangeError`) derrubando o processo do integrador — DoS
+ * local confirmado por execução (Rodada 5 da auditoria).
  */
 export function deepOmitEmpty<T>(value: T): T {
-  if (Array.isArray(value)) {
-    return value.map(deepOmitEmpty) as T
+  return cleanDeep(value) as T
+}
+
+interface CleanConsumer {
+  kind: 'array-item' | 'object-value'
+  out: unknown[] | Record<string, unknown>
+  key?: string
+}
+
+interface CleanFrame {
+  kind: 'array' | 'object'
+  items?: unknown[]
+  entries?: [string, unknown][]
+  index: number
+  out: unknown[] | Record<string, unknown>
+  consumer: CleanConsumer | null
+}
+
+/** Iterativo — semântica idêntica à recursão original (sem stack overflow). */
+function cleanDeep(value: unknown): unknown {
+  const isContainer = (v: unknown): v is object => v !== null && typeof v === 'object'
+  const stack: CleanFrame[] = []
+  let rootResult: unknown = value
+
+  const pushFrame = (node: unknown, consumer: CleanConsumer | null): void => {
+    if (Array.isArray(node)) {
+      stack.push({ kind: 'array', items: node, index: 0, out: [], consumer })
+    } else {
+      stack.push({ kind: 'object', entries: Object.entries(node as object), index: 0, out: {}, consumer })
+    }
   }
-  if (value !== null && typeof value === 'object') {
-    const out: Record<string, unknown> = {}
-    for (const [key, val] of Object.entries(value as object)) {
-      const cleaned = deepOmitEmpty(val)
-      if (cleaned === undefined) continue
-      if (
-        cleaned !== null &&
-        typeof cleaned === 'object' &&
-        !Array.isArray(cleaned) &&
-        Object.keys(cleaned).length === 0
-      ) {
+
+  const deliver = (result: unknown, consumer: CleanConsumer | null): void => {
+    if (consumer === null) return
+    if (consumer.kind === 'array-item') {
+      ;(consumer.out as unknown[]).push(result)
+      return
+    }
+    // object-value: omite `undefined` e objetos que ficaram vazios.
+    if (result === undefined) return
+    const isEmptyObj =
+      result !== null &&
+      typeof result === 'object' &&
+      !Array.isArray(result) &&
+      Object.keys(result).length === 0
+    if (isEmptyObj) return
+    assignOwn(consumer.out as Record<string, unknown>, consumer.key as string, result)
+  }
+
+  if (!isContainer(value)) return value
+  pushFrame(value, null)
+
+  while (stack.length > 0) {
+    const frame = stack[stack.length - 1] as CleanFrame
+
+    if (frame.kind === 'array') {
+      const items = frame.items as unknown[]
+      if (frame.index >= items.length) {
+        stack.pop()
+        deliver(frame.out, frame.consumer)
+        if (stack.length === 0) rootResult = frame.out
         continue
       }
-      assignOwn(out, key, cleaned)
+      const item = items[frame.index]
+      frame.index++
+      if (isContainer(item)) {
+        pushFrame(item, { kind: 'array-item', out: frame.out })
+      } else {
+        ;(frame.out as unknown[]).push(item)
+      }
+      continue
     }
-    return out as T
+
+    const entries = frame.entries as [string, unknown][]
+    if (frame.index >= entries.length) {
+      stack.pop()
+      deliver(frame.out, frame.consumer)
+      if (stack.length === 0) rootResult = frame.out
+      continue
+    }
+    const [key, val] = entries[frame.index] as [string, unknown]
+    frame.index++
+    if (isContainer(val)) {
+      pushFrame(val, { kind: 'object-value', out: frame.out, key })
+    } else if (val !== undefined) {
+      assignOwn(frame.out as Record<string, unknown>, key, val)
+    }
   }
-  return value
+
+  return rootResult
 }
 
 /**

@@ -1,5 +1,6 @@
 import { ApiError } from '@nodemelivre/errors'
 import type { ResourceTransport } from './transport.js'
+import { UNSAFE_KEYS } from './utils.js'
 
 /** Resultado de uma operação que pode falhar parcialmente. */
 export interface PartialResult<T> {
@@ -61,7 +62,13 @@ export async function parallel<T extends Record<string, () => Promise<unknown>>>
     const [resource] = entry
 
     if (result.status === 'fulfilled') {
-      data[resource] = result.value
+      // Chave `__proto__` (própria em objeto montado por JSON.parse/spread)
+      // acionaria o setter de prototype ao atribuir — pollution local no
+      // resultado. Chaves perigosas são puladas via UNSAFE_KEYS (mesma
+      // disciplina do resto do core; Rodada 6).
+      if (!UNSAFE_KEYS.has(resource)) {
+        data[resource] = result.value
+      }
     } else {
       const error = result.reason
       let code = 'UNKNOWN_ERROR'

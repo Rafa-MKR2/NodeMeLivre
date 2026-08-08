@@ -178,6 +178,59 @@ function isHttpUrl(value: string): boolean {
 }
 
 /**
+ * Serviços de DNS wildcard públicos que resolvem qualquer subdomínio para um
+ * IP do atacante escolhido (ex.: `127.0.0.1.nip.io` → 127.0.0.1). Usados em
+ * ataques de DNS-rebinding/SSRF: o host é público e "bonito", mas resolve
+ * para loopback/privado. Como o SDK não resolve DNS, o bloqueio é por
+ * sufixo conhecido — cobre os serviços clássicos.
+ */
+const WILDCARD_DNS_SUFFIXES = [
+  'nip.io',
+  'sslip.io',
+  'xip.io',
+  'localtest.me',
+  'lvh.me',
+  'vcap.me',
+  'nip.rocks',
+] as const
+
+/** Extrai o IPv4 embutido de um IPv6 transição e valida contra ranges locais. */
+function isBlockedTransitionIPv6(host: string): boolean {
+  // NAT64 well-known prefix (64:ff9b::/96): o WHATWG URL normaliza para hex
+  // (`64:ff9b::7f00:1`), mas o dotted também é aceito na entrada — tratamos
+  // os dois. O prefixo na forma compacta tem exatamente `64:ff9b::`.
+  const nat64 = host.match(
+    /^64:ff9b::((\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})|([0-9a-f]{1,4}):([0-9a-f]{1,4}))$/i,
+  )
+  if (nat64 !== null) {
+    if (nat64[2] !== undefined) return isBlockedIPv4(nat64[2])
+    if (nat64[3] !== undefined && nat64[4] !== undefined) {
+      const hi = Number.parseInt(nat64[3], 16)
+      const lo = Number.parseInt(nat64[4], 16)
+      return isBlockedIPv4(`${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`)
+    }
+  }
+
+  // 6to4 (2002::/16): `2002:7f00:1::` embute o IPv4 nos próximos 32 bits.
+  const sixto4 = host.match(/^2002:([0-9a-f]{1,4}):([0-9a-f]{1,4})(:|$)/i)
+  if (sixto4 !== null && sixto4[1] !== undefined && sixto4[2] !== undefined) {
+    const hi = Number.parseInt(sixto4[1], 16)
+    const lo = Number.parseInt(sixto4[2], 16)
+    return isBlockedIPv4(`${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`)
+  }
+
+  // IPv4-compatível (::/96, deprecated): `::7f00:1` → 127.0.0.1.
+  const compat = host.match(/^::([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i)
+  if (compat !== null && compat[1] !== undefined && compat[2] !== undefined) {
+    const hi = Number.parseInt(compat[1], 16)
+    const lo = Number.parseInt(compat[2], 16)
+    return isBlockedIPv4(`${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`)
+  }
+
+  return false
+}
+
+/**
  * Detecta hosts usados em ataques SSRF (IPs privados/locais e metadata cloud).
  * A verificação é sintática sobre o hostname — `new URL` já validou o formato.
  */
@@ -198,6 +251,10 @@ function isBlockedHttpHost(value: string): boolean {
 
   if (host === 'localhost' || host.endsWith('.localhost')) return true
   if (host === 'metadata' || host === 'metadata.google.internal') return true
+  if (WILDCARD_DNS_SUFFIXES.some((suffix) => host === suffix || host.endsWith(`.${suffix}`))) {
+    // DNS wildcard público que resolve para IPs locais (Rodada 6).
+    return true
+  }
 
   if (isIPv4Literal(host)) {
     return isBlockedIPv4(host)
@@ -222,6 +279,10 @@ function isBlockedHttpHost(value: string): boolean {
       const ip = `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`
       return isBlockedIPv4(ip)
     }
+    // Mecanismos de transição IPv6 (Rodada 6): NAT64 (64:ff9b::/96),
+    // 6to4 (2002::/16) e IPv4-compatível (::/96) embutem um IPv4 que pode
+    // rotear para loopback/privado em redes IPv6-only.
+    if (isBlockedTransitionIPv6(host)) return true
   }
 
   return false

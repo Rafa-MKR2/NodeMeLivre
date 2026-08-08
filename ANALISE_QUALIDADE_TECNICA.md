@@ -2,7 +2,7 @@
 
 **Data:** 2026-08-08  
 **Versão:** 1.0.0-beta.1  
-**Escopo:** 14 pacotes, 45 arquivos fonte, 6.5k LOC, 222 testes (na época da análise; hoje 316 testes, ver seções de status)
+**Escopo:** 14 pacotes, 45 arquivos fonte, 6.5k LOC, 222 testes (na época da análise; hoje 325 testes, ver seções de status)
 
 ---
 
@@ -12,7 +12,7 @@ O SDK **funciona** (testes passam, build compila, tipo seguro), mas apresenta **
 
 | Métrica | Valor | Avaliação |
 |---------|-------|-----------|
-| **Cobertura de testes** | 222 testes / 6.5k LOC (na época; hoje 316) | Boa quantidade, mas **foco errado** (na época) |
+| **Cobertura de testes** | 222 testes / 6.5k LOC (na época; hoje 319) | Boa quantidade, mas **foco errado** (na época) |
 | **Duplicação de código** | 3+ funções idênticas (`paginationOptions`) | **Alta** |
 | **Acoplamento temporal** | PKCE em memória, FileTokenStore não-atômico | **Crítico** |
 | **Type safety real** | `unknown` bem usado, mas `any` implícito em cast | **Média** |
@@ -128,7 +128,7 @@ expect(result).toEqual(item)
 
 **Cobertura ilusória (na época):** 222 testes = 222 cenários de "mock retorna X, espero Y". **Zero testes de integração** contra API real ou simulador de rede.
 
-> **Status posterior (Fase 4):** adicionada suite de integração real com `MockMercadoLivreServer` (`node:http`, zero-dep) — contrato HTTP, retry 429/5xx, rate limit, timeout, network partition, refresh 401, OAuth PKCE ponta a ponta, fluxos nível 3 e **chaos testing** (latência, instabilidade, partição por endpoint). Total hoje: 316 testes.
+> **Status posterior (Fase 4):** adicionada suite de integração real com `MockMercadoLivreServer` (`node:http`, zero-dep) — contrato HTTP, retry 429/5xx, rate limit, timeout, network partition, refresh 401, OAuth PKCE ponta a ponta, fluxos nível 3 e **chaos testing** (latência, instabilidade, partição por endpoint). Total hoje: 325 testes.
 
 ---
 

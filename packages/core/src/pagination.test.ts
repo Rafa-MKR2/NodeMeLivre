@@ -103,6 +103,24 @@ describe('paginate', () => {
     expect(fetchPage).not.toHaveBeenCalled()
   })
 
+  it('deve parar quando a API devolve a mesma página (não avança o offset)', async () => {
+    // Cenário de DoS da Rodada 5: API ignora `offset` e devolve sempre a
+    // mesma página com `total: null` — antes, o loop nunca terminava.
+    const fetchPage: PageFetcher<number> = vi.fn(async () => ({
+      results: [1, 2],
+      paging: { total: null, offset: 0, limit: 2 },
+    }))
+
+    const items: number[] = []
+    for await (const n of paginate(fetchPage, { limit: 2 })) {
+      items.push(n)
+    }
+
+    // Itens da primeira página são entregues, e a iteração para no ciclo.
+    expect(items).toEqual([1, 2])
+    expect(fetchPage).toHaveBeenCalledTimes(2)
+  })
+
   it('deve abortar entre os itens de uma mesma página', async () => {
     const controller = new AbortController()
     const fetchPage: PageFetcher<number> = vi.fn(async () => {

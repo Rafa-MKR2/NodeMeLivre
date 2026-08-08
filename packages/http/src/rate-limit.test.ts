@@ -93,6 +93,33 @@ describe('RateLimiter', () => {
     expect(resolved).toBe(true)
   })
 
+  it('deve limitar a espera quando o reset está muito no futuro (anti-DoS)', async () => {
+    // Rodada 5: um `x-rate-limit-reset` no futuro distante (header corrompido
+    // ou malicioso) fazia o SDK dormir dias. A espera agora é limitada a 5 min.
+    const limiter = new RateLimiter()
+    const resetAt = 9_999_999_999_999 // ~2286
+    limiter.update(
+      '/items/MLB1',
+      headers({
+        'x-rate-limit-remaining': '0',
+        'x-rate-limit-reset': String(resetAt),
+      }),
+    )
+
+    let resolved = false
+    const waiting = limiter.waitIfNeeded('/items/MLB1').then(() => {
+      resolved = true
+    })
+
+    // 5 min - 1s: ainda aguardando
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000 - 1_000)
+    expect(resolved).toBe(false)
+    // Último segundo do teto de 5 min: resolve
+    await vi.advanceTimersByTimeAsync(1_000)
+    await waiting
+    expect(resolved).toBe(true)
+  })
+
   it('deve limpar o estado quando a janela já expirou', async () => {
     const limiter = new RateLimiter()
     limiter.update(

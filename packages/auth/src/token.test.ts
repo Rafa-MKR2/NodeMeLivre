@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -66,5 +66,20 @@ describe('FileTokenStore', () => {
     const { writeFile } = await import('node:fs/promises')
     await writeFile(join(dir, 'broken.json'), 'not json')
     expect(await store.get()).toBeNull()
+  })
+
+  it('deve escrever token e lease com permissão 0o600 (disciplina de segredos)', async () => {
+    const filePath = join(dir, 'token.json')
+    const store = new FileTokenStore({ filePath })
+
+    await store.set(token())
+    await store.acquireLease({ holderId: 'h1' })
+
+    const tokenMode = (await stat(filePath)).mode & 0o777
+    expect(tokenMode).toBe(0o600)
+
+    // O lease não contém segredo, mas segue a mesma disciplina (Rodada 6).
+    const leaseMode = (await stat(`${filePath}.lease`)).mode & 0o777
+    expect(leaseMode).toBe(0o600)
   })
 })

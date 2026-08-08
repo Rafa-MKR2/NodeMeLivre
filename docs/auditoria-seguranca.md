@@ -16,7 +16,7 @@ Auditoria de segurança complementar ao [DOCUMENTO_CORRECOES.md](../DOCUMENTO_CO
 - **Exposição de segredos** (logs, eventos)
 - Higiene: permissões de arquivo, CSPRNG, CI, segredos no repo
 
-Em **quatro rodadas** (auditoria inicial + re-auditoria exaustiva com execução real de experimentos e revisão independente + verificação adicional com revisor independente + auditoria focada em OAuth/PKCE/timing/concorrência), foram identificados **15 achados** (1 média-alta, 3 médias, 2 baixa-média, 9 baixos). **13 correções foram implementadas**, 1 item documentado (eventos) e 1 mitigado (temp previsível do `FileTokenStore`). O estado atual é **verde**: 316 testes, lint, typecheck e build passando.
+Em **seis rodadas** (auditoria inicial + re-auditoria exaustiva com execução real de experimentos e revisão independente + verificação adicional com revisor independente + auditoria focada em OAuth/PKCE/timing/concorrência + auditoria focada em DoS/erros/payloads + auditoria cega independente com confirmação por execução), foram identificados **24 achados** (1 média-alta, 8 médias, 3 baixa-média, 12 baixos). **22 correções foram implementadas**, 1 item documentado (eventos) e 1 mitigado (temp previsível do `FileTokenStore`). O estado atual é **verde**: 325 testes, lint, typecheck, build e `npm run security:check` (25/25) passando.
 
 **Veredito:** o SDK estava **acima da média** em higiene (CSPRNG para state, token em arquivo com `0o600`, sem segredos em logs, rate-limit por recurso não-fragmentado). Os vetores com impacto real — path traversal via normalização de URL, bypass de SSRF por trailing dot e perda de token na re-autenticação — foram corrigidos e cobertos por testes.
 
@@ -58,6 +58,25 @@ Em **quatro rodadas** (auditoria inicial + re-auditoria exaustiva com execução
 | 13 | **Re-autenticação perde o token novo** — `saveAuthorizationCode` com `compareAndSet(token, 0)` falha silenciosamente quando já há token (version ≥ 1); o SDK segue com sessão expirada após re-login | 🟡 Média | ✅ Corrigido | `TokenManager` lê a versão atual + força sobrescrita em conflito |
 | 14 | `instanceId` do `TokenManager` com `Math.random()` (holderId do lease previsível — colisão liberaria leases cruzados) | 🟢 Baixa | ✅ Corrigido | CSPRNG (`randomBytes(8)`) |
 | 15 | Fallback in-memory de `code_verifier` sem limite (memory leak com URLs nunca consumidas) | 🟢 Baixa | ✅ Corrigido | max 1000 entradas + sweep de expiradas |
+
+### Rodada 5 — DoS, erros e payloads da API
+
+| # | Achado | Severidade | Status | Onde |
+|---|--------|------------|--------|------|
+| 16 | `deepOmitEmpty` recursivo estoura a pilha (RangeError) com payload profundamente aninhado — DoS local do processo do integrador | 🟡 Média | ✅ Corrigido | `cleanDeep` iterativo (pilha explícita) |
+| 17 | `paginate()` em loop infinito quando a API ignora `offset` (página repetida + `total: null`) — requisições infinitas | 🟡 Média | ✅ Corrigido | guard de página repetida antes de entregar itens |
+| 18 | `RateLimiter` dorme dias com `x-rate-limit-reset` no futuro distante (header corrompido/gateway) — DoS de espera | 🟡 Média | ✅ Corrigido | teto `MAX_WAIT_MS` (5 min) |
+
+### Rodada 6 — auditoria cega independente (confirmação por execução)
+
+| # | Achado | Severidade | Status | Onde |
+|---|--------|------------|--------|------|
+| 19 | Origin escape no `buildUrl`: path absoluto (`https://evil.com/y`) ou protocol-relative (`//evil.com/x`) leva o `Authorization` para outro origin (confused deputy via `ml.http.*`) | 🔴 Média | ✅ Corrigido | `buildUrl` rejeita path não-relativo |
+| 20 | DNS-rebinding: serviços wildcard públicos (`nip.io`, `sslip.io`, `xip.io`, `localtest.me`...) passam no `httpUrlSchema` — `127.0.0.1.nip.io` → loopback | 🟡 Média | ✅ Corrigido | `WILDCARD_DNS_SUFFIXES` bloqueado |
+| 21 | IPv6 transition (NAT64 `64:ff9b::/96`, 6to4 `2002::/16`, IPv4-compat `::/96`) embute IPv4 local e passa no schema | 🟡 Baixa-Média | ✅ Corrigido | `isBlockedTransitionIPv6` re-valida octetos embutidos |
+| 22 | `Authorization` reenviado em redirect cross-origin autorizado (`api.mercadolibre.com` → `api.mercadolivre.com.br`) — fetch nativo removeria o header | 🟢 Baixa | ✅ Corrigido | header dropado quando `next.origin !== url.origin` |
+| 23 | `parallel()` faz pollution local via chave `__proto__` (valor resolvido vira prototype de `data`) | 🟢 Baixa | ✅ Corrigido | `Object.create(null)` para `data` |
+| 24 | `FileTokenStore` cria `.lease`/`.lock` com umask padrão (0644) — token é `0o600`, auxiliares não | 🟢 Baixa | ✅ Corrigido | `mode: 0o600` em lease e lock |
 
 ---
 
@@ -369,6 +388,158 @@ Mesma política do `OAuthStateStore`: limite de **1000 entradas** (expulsa a mai
 
 ---
 
+## 🟡 ACHADO 16 — `deepOmitEmpty` recursivo estoura a pilha (Rodada 5)
+
+### Localização
+```
+packages/core/src/utils.ts — deepOmitEmpty()
+```
+
+### Descrição do Problema
+`deepOmitEmpty` limpava recursivamente objetos aninhados. Input de usuário pode ter **profundidade arbitrária** (ex.: `attributes` de item com nested objects vindos de `JSON.parse`): a versão recursiva estoura a pilha do V8 (~10k frames → `RangeError: Maximum call stack size exceeded`) e **derruba o processo** do integrador — DoS local a partir de um payload malformado.
+
+### Evidência (execução real)
+```
+payload com profundidade ~10.000 → RangeError: Maximum call stack size exceeded (antes)
+payload com profundidade ~10.000 → limpeza concluída (depois, pilha explícita)
+```
+
+### Correção Implementada
+Reescrita **iterativa** (`cleanDeep` com pilha explícita de frames + `deliver` por consumer): semântica idêntica à recursão original (preserva `null`, omite `undefined` e objetos vazios, ignora `UNSAFE_KEYS`), sem recursão de função — profundidade arbitrária processada sem estourar a pilha. Teste: payload de 10k de profundidade limpa sem `RangeError`.
+
+---
+
+## 🟡 ACHADO 17 — `paginate()` em loop infinito (Rodada 5)
+
+### Localização
+```
+packages/core/src/pagination.ts — paginate()
+```
+
+### Descrição do Problema
+Quando a API ignora o parâmetro `offset` e devolve sempre a mesma página (com `paging.total: null` — respostas de busca normalmente trazem `total`, mas a defesa não podia assumir), o `paginate()` avançava o offset e buscava **para sempre**: requisições infinitas à API (consumo de rate limit e do orçamento do integrador — DoS). Confirmado por execução: fetch chamado indefinidamente.
+
+### Correção Implementada
+Guarda de página repetida: se a página atual começa com o **mesmo primeiro item** da anterior (JSON.stringify do primeiro elemento), a iteração encerra **antes de entregar os itens repetidos**. As páginas legítimas seguem intactas (página de itens diferentes nunca dispara o guard). Teste: API que devolve `[1,2]` sempre → iteração entrega `[1,2]` e faz exatamente 2 chamadas.
+
+---
+
+## 🟡 ACHADO 18 — `RateLimiter` com espera gigante (Rodada 5)
+
+### Localização
+```
+packages/http/src/rate-limit.ts — RateLimiter.waitIfNeeded()
+```
+
+### Descrição do Problema
+O `RateLimiter` calcula a espera como `resetAt - now` sem teto. Um header `x-rate-limit-reset` **corrompido ou injetado por gateway/atacante** com valor no futuro distante (ex.: epoch com unidade errada, ano 2099) fazia o SDK dormir **dias**: no experimento, `x-rate-limit-reset: 9999999999` (≈ ano 2286) gerou espera de ~95.067 dias — cada requisição ao recurso esgotado ficava presa por uma eternidade (DoS de espera, sem timeout).
+
+### Evidência (execução real)
+```
+x-rate-limit-reset futuro distante → delay de 95.067 dias (antes)
+x-rate-limit-reset futuro distante → espera limitada a 5 min (depois)
+```
+
+### Correção Implementada
+Teto `MAX_WAIT_MS = 5 min` (constante documentada) aplicado a qualquer espera calculada acima dele. O single-flight (`waits` por recurso) e a limpeza do estado esgotado ao fim da janela foram preservados. Teste: reset no futuro distante → delay é exatamente o teto.
+
+---
+
+## 🔴 ACHADO 19 — Origin escape no `buildUrl` (Rodada 6)
+
+### Localização
+```
+packages/http/src/client.ts — buildUrl()
+```
+
+### Descrição do Problema
+`new URL(path, baseUrl)` aceita path **absoluto** e **protocol-relative**: `http.get('//evil.example.com/x')` resolvia para `https://evil.example.com/x` e `http.get('https://evil.com/y')` idem — com o `Authorization: Bearer` no header (confirmado por execução). As resources tipadas validam tudo via `assertValidId` (que bloqueia `/` e `.`), então o vetor só abre se o integrador usar `ml.http.get()` com entrada não validada — e `ml.http` é **API pública documentada**. O SDK endureceu redirecionamentos para "não vazar o token", mas o URL inicial não tinha validação de origem — a mesma classe de confused deputy do Achado 1, agora na entrada do transport.
+
+### Correção Implementada
+`buildUrl` rejeita path que comece com `//` ou que contenha protocolo (`/^[a-z][a-z0-9+.-]*:/i`) com `InputValidationError` ("path deve ser relativo ao baseUrl") — o token nunca chega a sair do processo para outro origin. Teste: `get('https://evil.com/y')` e `get('//evil.example.com/x')` lançam sem chamar o fetch.
+
+---
+
+## 🟡 ACHADO 20 — SSRF por DNS wildcard público (Rodada 6)
+
+### Localização
+```
+packages/core/src/schemas.ts — httpUrlSchema / isBlockedHttpHost()
+```
+
+### Descrição do Problema
+Serviços como `nip.io`, `sslip.io`, `xip.io` e `localtest.me` resolvem **qualquer** host para um IP escolhido no próprio hostname (`127.0.0.1.nip.io` → 127.0.0.1). Confirmado por execução: todos passavam no schema como "hosts públicos" — o bloqueio cobria apenas IPs literais e hostnames exatos. Impacto atenuado porque quem faz o fetch é o ML (uploadFromUrl), mas o vetor de abuso da plataforma descrito no Achado 2 permanecia aberto.
+
+### Correção Implementada
+`WILDCARD_DNS_SUFFIXES` (nip.io, sslip.io, xip.io, localtest.me, lvh.me, vcap.me, nip.rocks) bloqueados como host exato ou sufixo — cobre os serviços wildcard clássicos. DNS-rebinding por serviços novos exige atualização da lista (trade-off documentado: o schema é síncrono e não resolve DNS).
+
+---
+
+## 🟡 ACHADO 21 — SSRF por transição IPv6 (Rodada 6)
+
+### Localização
+```
+packages/core/src/schemas.ts — isBlockedHttpHost()
+```
+
+### Descrição do Problema
+Mecanismos de transição IPv6 embutem um IPv4 que roteia para loopback/privado em redes IPv6-only — e todos passavam no schema (confirmado por execução):
+```
+[64:ff9b::7f00:1]   NAT64 well-known prefix → 127.0.0.1
+[2002:7f00:1::]     6to4                  → 127.0.0.1
+[::7f00:1]          IPv4-compatível        → 127.0.0.1
+```
+
+### Correção Implementada
+`isBlockedTransitionIPv6()` extrai o IPv4 embutido de cada mecanismo (dotted e hex — o WHATWG URL normaliza para hex) e reaplica `isBlockedIPv4`: NAT64 `64:ff9b::/96`, 6to4 `2002::/16` (próximos 32 bits) e IPv4-compatível `::/96`. IPv6 público legítimo (`2001:4860:4860::8888`) permanece aceito.
+
+---
+
+## 🟢 ACHADO 22 — `Authorization` em redirect cross-origin (Rodada 6)
+
+### Localização
+```
+packages/http/src/client.ts — performFetch()
+```
+
+### Descrição do Problema
+O `redirect: 'manual'` + resolução manual dos hops reutilizava `currentHeaders` (com `Authorization`) em cada hop. Um redirect 302 para outro host autorizado (ex.: `api.mercadolivre.com.br` vindo de `api.mercadolibre.com`) carregava o Bearer — confirmado por execução (header presente no 2º hop). O fetch nativo teria removido o header na troca de origin. Risco baixo (hosts autorizados são oficiais do ML), mas com `baseUrl` próprio (proxy/staging) o token ia para qualquer subdomínio do integrador.
+
+### Correção Implementada
+Quando `next.origin !== url.origin` (origin da requisição original), o `Authorization` é removido do header antes do próximo hop — mesmo comportamento do fetch. Redirect same-origin preserva o token. Teste: Bearer presente na origem e `null` no hop cross-origin.
+
+---
+
+## 🟢 ACHADO 23 — Pollution local em `parallel()` (Rodada 6)
+
+### Localização
+```
+packages/core/src/resilience.ts — parallel()
+```
+
+### Descrição do Problema
+`data[resource] = value` com `resource = '__proto__'` (chave própria de um objeto de operações montado por `JSON.parse`/spread) aciona o **setter de prototype**: o valor resolvido vira o prototype de `data`, e `data.injected`/`data.from` ficam visíveis sem estar em `Object.keys(data)` (confirmado por execução). Não é pollution global, mas o resto do SDK trata `__proto__` com `UNSAFE_KEYS` — `parallel()` era a exceção.
+
+### Correção Implementada
+`data` é criado com `Object.create(null)` — a atribuição vira own property, sem acionar setter. Teste: `data.injected` é `undefined` e `({}).injected` permanece `undefined`.
+
+---
+
+## 🟢 ACHADO 24 — Permissões de `.lease`/`.lock` no `FileTokenStore` (Rodada 6)
+
+### Localização
+```
+packages/auth/src/token.ts — acquireLease() / renewLease() / acquireLock()
+```
+
+### Descrição do Problema
+O token era escrito com `mode: 0o600`, mas o lease (`writeFile` sem mode) e o lock (`open` sem mode) eram criados com umask padrão (0644) — confirmado por execução (`sdk-token.json` = 600, `.lease` = 644). O lease não contém segredo, mas quebra a disciplina de permissão do diretório de tokens.
+
+### Correção Implementada
+`mode: 0o600` em todas as escritas de lease (acquire/renew) e no `open()` do lock. Teste: token e lease com 600.
+
+---
+
 ## ✅ Verificações da Rodada 4 — OAuth/PKCE, timing e concorrência (sem problema)
 
 | Vetor | Resultado |
@@ -384,6 +555,19 @@ Mesma política do `OAuthStateStore`: limite de **1000 entradas** (expulsa a mai
 | **Segredos em logs/eventos** | `client_secret`/`refresh_token` nunca logados pelos caminhos padrão (eventos emitem `userId`/URL) ✅ |
 | **401 sem refresh_token** | `OAuthError('missing_refresh_token')` tipado, sem loop ✅ |
 | **Checksum do FileTokenStore** | SHA-256 sem MAC — detecta corrupção/tamper acidental; atacante com escrita no arquivo pode recalcular (risco residual aceito, documentado) ⚪ |
+
+---
+
+## 🔁 Verificação automatizada no CI (`security:check`)
+
+Para impedir regressão dos vetores corrigidos, o monorepo tem `npm run security:check` (`scripts/security-check.mjs`, Node puro, zero dependências) rodando no CI entre os testes e o build:
+
+| Estágio | Cobre |
+|---|---|
+| **1. Estático** (scan) | segredos hardcoded em `packages/*/src`; APIs removidas não podem ressurgir (`assertValidItemInput`, `getGlobalOAuthStateStore`, `resetGlobalOAuthStateStore`, `securityHeaders`, `SECURITY_HEADERS`); `Math.random` em código do auth (CSPRNG); chaves `__proto__`/`constructor`/`prototype` fora do `UNSAFE_KEYS`; presença dos fixes: trailing dot no `httpUrlSchema` (Rodada 3), `sanitizeLog` com NEL/DEL (Rodadas 2-3), `randomBytes` no instanceId e limite do fallback de `code_verifier` (Rodada 4), `ApiError.message` sanitizado (Rodada 3), `deepOmitEmpty` iterativo, guard de página repetida no `paginate` e `MAX_WAIT_MS` no rate limit (Rodada 5), origin guard no `buildUrl`, drop de Authorization cross-origin, cap do `Retry-After`, DNS wildcard e IPv6 transition no `httpUrlSchema`, `Object.create(null)` no `parallel`, `0o600` no lease/lock (Rodada 6) |
+| **2. Dinâmico** | executa os 14 arquivos de teste de segurança (schemas, http client/integration, utils, webhooks, errors, refresh/oauth, questions, items, pagination, rate-limit, resilience, token) — 25/25 checagens |
+
+`npm run security:static` roda apenas o estágio 1 (mais rápido para desenvolvimento). Uma violação falha o CI com exit code 1.
 
 ---
 
@@ -407,9 +591,9 @@ Mesma política do `OAuthStateStore`: limite de **1000 entradas** (expulsa a mai
 | Severidade | Achados | Status |
 |---|---|---|
 | 🔴 Média-Alta | Path traversal (1) | ✅ Corrigido |
-| 🟡 Média | SSRF trailing dot (10), Log injection webhooks (6), Re-auth perde token (13) | ✅ Corrigido |
-| 🟡 Baixa-Média | SSRF no schema (2), Redirects (3) | ✅ Corrigido |
-| 🟢 Baixa | `reply` NaN (4), Eventos (5), Prototype (7), API IDs (8), temp previsível (9), `ApiError.message` (11), NEL/DEL (12), instanceId previsível (14), code_verifier leak (15) | ✅ Corrigido / 📚 Documentado |
+| 🟡 Média | SSRF trailing dot (10), Log injection webhooks (6), Re-auth perde token (13), `deepOmitEmpty` stack overflow (16), `paginate` loop infinito (17), `RateLimiter` espera gigante (18), Origin escape no `buildUrl` (19), DNS wildcard (20) | ✅ Corrigido |
+| 🟡 Baixa-Média | SSRF no schema (2), Redirects (3), IPv6 transition (21) | ✅ Corrigido |
+| 🟢 Baixa | `reply` NaN (4), Eventos (5), Prototype (7), API IDs (8), temp previsível (9), `ApiError.message` (11), NEL/DEL (12), instanceId previsível (14), code_verifier leak (15), Authorization cross-origin (22), `parallel` `__proto__` (23), permissões lease/lock (24) | ✅ Corrigido / 📚 Documentado |
 
 ---
 
@@ -424,4 +608,4 @@ Mesma política do `OAuthStateStore`: limite de **1000 entradas** (expulsa a mai
 
 ---
 
-*Auditoria baseada em leitura dos 14 pacotes (src + testes), execução real de experimentos para confirmação dos vetores (URL parser na Rodada 3; refresh/re-auth/PKCE na Rodada 4), e validação final com 316 testes, lint, typecheck e build verdes (Rodadas 1–2 no commit `3ae58fb`; Rodada 3 no commit `2aa5ed0`; Rodada 4 pendente de commit).*
+*Auditoria baseada em leitura dos 14 pacotes (src + testes), execução real de experimentos para confirmação dos vetores (URL parser na Rodada 3; refresh/re-auth/PKCE na Rodada 4; deepOmitEmpty/paginate/rate-limit na Rodada 5; buildUrl/redirect/DNS/IPv6/parallel/permissões na Rodada 6 — auditada por analista independente), e validação final com 325 testes, lint, typecheck, build e `npm run security:check` (25/25) verdes (Rodadas 1–2 no commit `3ae58fb`; Rodada 3 no commit `2aa5ed0`; Rodada 4 no commit `506d6c8`).*

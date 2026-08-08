@@ -18,7 +18,9 @@
     "typecheck:examples": "tsc -p tsconfig.examples.json --noEmit",
     "typecheck:all": "npm run typecheck && npm run typecheck:examples",
     "lint": "biome check .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "security:check": "node scripts/security-check.mjs",
+    "security:static": "node scripts/security-check.mjs --static-only"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",

@@ -10,7 +10,7 @@
 
 Foram identificadas **7 falhas** no SDK NodeMeLivre, sendo **2 CRÍTICAS (P0)** que quebram funcionalidades essenciais em produção clusterizada, **2 ALTAS (P1)** que afetam arquitetura e segurança, **2 MÉDIAS (P2)** com risco de vazamento de memória e race conditions, e **1 BAIXA (P4)**.
 
-Todos os testes atuais passam (222/222 na época da análise), mas **não cobriam cenários multi-instância, concorrência de arquivos, nem vazamento de memória em long-running** — desde então, os P0/P1/P2 foram resolvidos (status abaixo) e a suíte cresceu para **316 testes**, incluindo integração real multi-instância e chaos testing. Ver também [docs/auditoria-seguranca.md](docs/auditoria-seguranca.md) para a auditoria de segurança complementar (4 rodadas, 15 achados, 13 corrigidos + 1 documentado + 1 mitigado).
+Todos os testes atuais passam (222/222 na época da análise), mas **não cobriam cenários multi-instância, concorrência de arquivos, nem vazamento de memória em long-running** — desde então, os P0/P1/P2 foram resolvidos (status abaixo) e a suíte cresceu para **325 testes**, incluindo integração real multi-instância e chaos testing. Ver também [docs/auditoria-seguranca.md](docs/auditoria-seguranca.md) para a auditoria de segurança complementar (6 rodadas, 24 achados, 22 corrigidos + 1 documentado + 1 mitigado).
 
 ---
 

@@ -23,6 +23,7 @@ function sanitizeLog(value: unknown): string {
   // Remove quebras de linha (CR/LF, separadores Unicode) e control chars —
   // um payload com `\n`, `\u2028` ou `\x1b` não pode forjar linhas de log.
   const text = String(value)
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: control chars são o alvo (anti log-injection)
     .replace(/[\r\n\u2028\u2029\u0085\x00-\x1f\x7f]+/g, ' ')
     .trim()
   return text.length > 100 ? `${text.slice(0, 100)}…` : text

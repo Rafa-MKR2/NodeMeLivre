@@ -39,6 +39,23 @@ describe('parallel', () => {
     })
     expect(result.errors[0]).toMatchObject({ code: 'UNKNOWN_ERROR', message: 'boom' })
   })
+
+  it('não polui o resultado com chave __proto__ (anti prototype pollution)', async () => {
+    // Operações montadas de JSON.parse podem ter `__proto__` como chave própria.
+    const ops: Record<string, () => Promise<unknown>> = Object.create(null)
+    ops['__proto__'] = async () => ({ injected: true })
+    ops['legit'] = async () => 'ok'
+
+    const result = await parallel(ops)
+    const data = result.data as unknown as Record<string, unknown>
+
+    // O valor resolvido de `__proto__` NÃO vira prototype do resultado:
+    // `data.injected` (herdado via setter) não existe.
+    expect((data as Record<string, unknown>).injected).toBeUndefined()
+    expect((data as Record<string, unknown>).legit).toBe('ok')
+    // Sem pollution global no Object.prototype.
+    expect(({} as Record<string, unknown>).injected).toBeUndefined()
+  })
 })
 
 describe('parallelBestEffort', () => {

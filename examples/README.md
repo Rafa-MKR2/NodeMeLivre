@@ -24,3 +24,5 @@ ML_CLIENT_ID=... ML_CLIENT_SECRET=... npx tsx examples/quickstart.ts
 | [events.ts](events.ts) | Observabilidade: logs de request/response/retry/error/rateLimit e tokenRefreshed |
 | [upload-e-variacoes.ts](upload-e-variacoes.ts) | Upload de imagem e criação de anúncio com variações |
 | [nivel-3-paginacao.ts](nivel-3-paginacao.ts) | Paginação assíncrona, publish/pause e waitUntilPaid |
+| [nivel-3-completo.ts](nivel-3-completo.ts) | Operações nível 3: createAndPublish, reply e printLabel |
+| [webhooks-e-messages.ts](webhooks-e-messages.ts) | Webhooks (parse/verify/verifyForUser) e chat de mensagens |
