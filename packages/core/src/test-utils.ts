@@ -1,3 +1,5 @@
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import type { AddressInfo } from 'node:net'
 import { vi } from 'vitest'
 import type { ResourceRequest, ResourceTransport } from './transport.js'
 
@@ -238,4 +240,308 @@ export function fakeTransport(
 function toUrl(input: URL | string): URL {
   if (input instanceof URL) return new URL(input.toString())
   return new URL(input)
+}
+
+// ---------------------------------------------------------------------------
+// Mock server de integração (HTTP real, zero dependências)
+// ---------------------------------------------------------------------------
+
+/** Requisição recebida pelo mock server, já normalizada. */
+export interface MockRequest {
+  method: string
+  /** Pathname (sem query). */
+  path: string
+  query: URLSearchParams
+  headers: IncomingMessage['headers']
+  /** Body JSON parseado (ou `undefined` quando não é JSON). */
+  body: unknown
+  /** Corpo cru em texto (JSON serializado ou texto plano). */
+  rawBody: string
+  /** Epoch ms em que o servidor recebeu a requisição. */
+  receivedAt: number
+}
+
+export interface MockResponse {
+  status?: number
+  headers?: Record<string, string>
+  json?: unknown
+  text?: string
+  /** Latência simulada antes de responder (ms) — simula rede lenta. */
+  delayMs?: number
+}
+
+export type MockHandler = (req: MockRequest) => MockResponse | Promise<MockResponse>
+
+export interface MockRoute {
+  method: string | undefined
+  path: string | RegExp
+  handler: MockHandler
+}
+
+/**
+ * Política de chaos aplicada sobre as respostas do mock.
+ *
+ * - `failureRate` — probabilidade (0..1) de responder com `failStatus`
+ *   (instabilidade intermitente).
+ * - `latencyMs`/`jitterMs` — atraso antes de responder (latência variável;
+ *   o jitter adiciona 0..jitterMs aleatório).
+ * - `random` — fonte aleatória injetável para testes determinísticos.
+ */
+export interface ChaosConfig {
+  /** Probabilidade (0..1) de responder com falha (padrão de falha: 503). */
+  failureRate?: number
+  /** Status da falha injetada (padrão: 503). */
+  failStatus?: number
+  /** Atraso fixo antes de responder (ms). */
+  latencyMs?: number
+  /** Jitter: atraso aleatório adicional de 0..jitterMs (ms). */
+  jitterMs?: number
+  /** Fonte aleatória injetável (determinismo em testes). */
+  random?: () => number
+}
+
+/**
+ * Servidor HTTP real simulando a API do Mercado Livre (zero dependências).
+ *
+ * Usado pelos testes de integração do SDK/HttpClient para validar o contrato
+ * HTTP (método/path/query/headers), retry (429/5xx), rate limit, timeout e
+ * falhas de rede — tudo com fetch real contra `127.0.0.1`.
+ *
+ * ```ts
+ * const server = new MockMercadoLivreServer()
+ * const baseUrl = await server.start()
+ * server.respond('GET', '/items/MLB1', 200, { id: 'MLB1' })
+ * const client = new HttpClient({ baseUrl })
+ * await client.get('/items/MLB1')
+ * expect(server.requests[0]?.headers.authorization).toBe('Bearer token')
+ * await server.stop()
+ * ```
+ */
+export class MockMercadoLivreServer {
+  private server: Server | null = null
+  private routes: MockRoute[] = []
+  readonly requests: MockRequest[] = []
+  baseUrl = ''
+
+  /** Registra rota para qualquer método. */
+  route(path: string | RegExp, handler: MockHandler): this
+  /** Registra rota para um método específico. */
+  route(method: string, path: string | RegExp, handler: MockHandler): this
+  route(a: string | RegExp, b: string | RegExp | MockHandler, c?: MockHandler): this {
+    if (typeof b === 'function') {
+      this.routes.push({ method: undefined, path: a as string | RegExp, handler: b })
+      return this
+    }
+    this.routes.push({ method: a as string, path: b, handler: c as MockHandler })
+    return this
+  }
+
+  /** Atalho para resposta JSON fixa. */
+  respond(
+    method: string,
+    path: string | RegExp,
+    status: number,
+    json?: unknown,
+    headers?: Record<string, string>,
+  ): this {
+    return this.route(method, path, () => {
+      const response: MockResponse = { status }
+      if (json !== undefined) response.json = json
+      if (headers !== undefined) response.headers = headers
+      return response
+    })
+  }
+
+  /** Aplica política de chaos global (toda requisição). */
+  chaos(config: ChaosConfig): this
+  /** Aplica política de chaos por endpoint (prefixo do path; o mais específico vence). */
+  chaos(prefix: string, config: ChaosConfig): this
+  chaos(a: string | ChaosConfig, b?: ChaosConfig): this {
+    if (typeof a === 'string') {
+      if (b === undefined) {
+        throw new Error('chaos(prefix) exige um ChaosConfig')
+      }
+      this.chaosByPrefix.push({ prefix: a, config: b })
+      return this
+    }
+    this.chaosGlobal = a
+    return this
+  }
+
+  /** Sobe o servidor numa porta efêmera e devolve a baseUrl. */
+  async start(): Promise<string> {
+    const server = createServer((req, res) => {
+      void this.handle(req, res)
+    })
+    // Conexões abortadas (timeout/cancelamento) não podem derrubar o servidor.
+    server.on('clientError', () => {})
+    this.server = server
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address() as AddressInfo
+    this.baseUrl = `http://127.0.0.1:${address.port}`
+    return this.baseUrl
+  }
+
+  /** Derruba o servidor e libera a porta (usado para simular falha de rede). */
+  async stop(): Promise<void> {
+    const server = this.server
+    if (server === null) return
+    this.server = null
+    await new Promise<void>((resolve, reject) => {
+      server.close((err) => (err !== undefined ? reject(err) : resolve()))
+      server.closeAllConnections?.()
+    })
+  }
+
+  /** Limpa rotas, políticas de chaos e histórico de requisições. */
+  clear(): this {
+    this.routes = []
+    this.requests.length = 0
+    this.chaosGlobal = null
+    this.chaosByPrefix = []
+    return this
+  }
+  private async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    res.on('error', () => {})
+    req.on('error', () => {})
+
+    let mockReq: MockRequest
+    try {
+      mockReq = await this.buildRequest(req)
+    } catch {
+      // Cliente abortou durante a leitura do corpo (timeout/cancelamento).
+      if (!res.writableEnded) res.destroy()
+      return
+    }
+    this.requests.push(mockReq)
+
+    const route = this.routes.find(
+      (r) =>
+        (r.method === undefined || r.method === mockReq.method) &&
+        matchesPath(r.path, mockReq.path),
+    )
+    if (route === undefined) {
+      this.writeJson(res, 404, {
+        message: `No mock route for ${mockReq.method} ${mockReq.path}`,
+      })
+      return
+    }
+
+    let response: MockResponse
+    try {
+      response = await route.handler(mockReq)
+    } catch (error) {
+      // Falha do handler (asserção ou bug do mock): expõe a causa ao cliente —
+      // o teste falha com a mensagem visível em vez de um erro de rede genérico.
+      this.writeJson(res, 500, { message: `Mock handler error: ${String(error)}` })
+      return
+    }
+
+    // Chaos: injeta falha ou latência sobre a resposta (simula produção instável).
+    const chaosConfig = this.resolveChaos(mockReq.path)
+    if (chaosConfig !== null) {
+      response = applyChaos(response, chaosConfig)
+    }
+
+    // A escrita pode falhar quando o cliente abortou (timeout/cancelamento).
+    try {
+      if (response.delayMs !== undefined && response.delayMs > 0) {
+        await new Promise((r) => setTimeout(r, response.delayMs))
+      }
+      const status = response.status ?? 200
+      const headers = {
+        'content-type':
+          response.text !== undefined ? 'text/plain; charset=utf-8' : 'application/json',
+        ...response.headers,
+      }
+      const payload =
+        response.text !== undefined ? response.text : JSON.stringify(response.json ?? {})
+      res.writeHead(status, headers)
+      res.end(payload)
+    } catch {
+      if (!res.writableEnded) res.destroy()
+    }
+  }
+
+  /** Política de chaos global (aplica-se a toda requisição). */
+  private chaosGlobal: ChaosConfig | null = null
+  /** Políticas de chaos por prefixo de path (a mais específica vence). */
+  private chaosByPrefix: Array<{ prefix: string; config: ChaosConfig }> = []
+
+  private resolveChaos(path: string): ChaosConfig | null {
+    let best: ChaosConfig | null = null
+    let bestLength = -1
+    for (const { prefix, config } of this.chaosByPrefix) {
+      // Casa por segmento do path: '/items' afeta '/items/MLB1', mas não '/itemscart'.
+      const matches = path === prefix || path.startsWith(`${prefix}/`)
+      if (matches && prefix.length > bestLength) {
+        best = config
+        bestLength = prefix.length
+      }
+    }
+    return best ?? this.chaosGlobal
+  }
+
+  private async buildRequest(req: IncomingMessage): Promise<MockRequest> {
+    const url = new URL(req.url ?? '/', this.baseUrl === '' ? 'http://localhost' : this.baseUrl)
+    const rawBody = await readRawBody(req)
+    return {
+      method: req.method ?? 'GET',
+      path: url.pathname,
+      query: url.searchParams,
+      headers: req.headers,
+      body: parseJsonBody(req.headers['content-type'], rawBody),
+      rawBody,
+      receivedAt: Date.now(),
+    }
+  }
+
+  private writeJson(res: ServerResponse, status: number, body: unknown): void {
+    try {
+      res.writeHead(status, { 'content-type': 'application/json' })
+      res.end(JSON.stringify(body))
+    } catch {
+      res.destroy()
+    }
+  }
+}
+
+async function readRawBody(req: IncomingMessage): Promise<string> {
+  const chunks: Buffer[] = []
+  for await (const chunk of req) {
+    chunks.push(chunk as Buffer)
+  }
+  return Buffer.concat(chunks).toString('utf8')
+}
+
+function parseJsonBody(contentType: string | undefined, raw: string): unknown {
+  if (contentType === undefined || !contentType.includes('application/json')) return undefined
+  if (raw.trim() === '') return undefined
+  try {
+    return JSON.parse(raw) as unknown
+  } catch {
+    return raw
+  }
+}
+
+function matchesPath(route: string | RegExp, path: string): boolean {
+  return typeof route === 'string' ? route === path : route.test(path)
+}
+
+/** Aplica a política de chaos sobre a resposta do handler. */
+function applyChaos(response: MockResponse, chaos: ChaosConfig): MockResponse {
+  const random = chaos.random ?? Math.random
+
+  // Instabilidade intermitente: sorteia a falha injetada.
+  if (chaos.failureRate !== undefined && random() < chaos.failureRate) {
+    return { status: chaos.failStatus ?? 503, json: { message: 'chaos: falha injetada' } }
+  }
+
+  // Latência variável: fixa + jitter aleatório.
+  const latency =
+    (chaos.latencyMs ?? 0) + (chaos.jitterMs !== undefined ? random() * chaos.jitterMs : 0)
+  if (latency > 0) {
+    return { ...response, delayMs: (response.delayMs ?? 0) + latency }
+  }
+  return response
 }

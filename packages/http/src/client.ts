@@ -65,21 +65,9 @@ export interface HttpClientOptions {
   defaultHeaders?: Record<string, string>
   /** Sleep injetável para backoff — útil para testes. */
   delay?: (ms: number) => Promise<void>
-  /**
-   * Adiciona headers de resposta como headers de request (padrão: `false`).
-   * Esses headers (CSP, X-Frame-Options etc.) pertencem ao servidor do
-   * integrador, não a requisições de API — mantidos apenas para opt-in.
-   */
-  securityHeaders?: boolean
 }
 
 const JSON_CONTENT_TYPE = 'application/json'
-
-const SECURITY_HEADERS: Record<string, string> = {
-  'X-Content-Type-Options': 'nosniff',
-  'Referrer-Policy': 'strict-origin-when-cross-origin',
-  'X-Frame-Options': 'DENY',
-}
 
 export class HttpClient extends EventEmitter<HttpClientEvents> {
   private readonly baseUrl: string
@@ -91,15 +79,12 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
   private readonly retry: Required<RetryOptions>
   private readonly auth: TokenProvider | undefined
   private readonly rateLimiter: RateLimiter | undefined
-  private readonly securityHeaders: boolean
 
   constructor(options: HttpClientOptions = {}) {
     super()
     this.baseUrl = options.baseUrl ?? MERCADO_LIVRE_BASE_URL
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 30_000
-    this.securityHeaders = options.securityHeaders ?? false
-    const security = this.securityHeaders ? SECURITY_HEADERS : {}
-    this.defaultHeaders = { ...security, ...options.defaultHeaders }
+    this.defaultHeaders = { ...options.defaultHeaders }
     this.fetchImpl = options.fetchImpl ?? fetch
     this.logger = options.logger ?? silentLogger
     this.delay = options.delay ?? ((ms) => new Promise((r) => setTimeout(r, ms)))

@@ -1,5 +1,9 @@
-import type { ResourceTransport } from '@nodemelivre/core'
-import { InputValidationError } from '@nodemelivre/errors'
+import {
+  assertValid,
+  httpUrlSchema,
+  nonEmptyFileSchema,
+  type ResourceTransport,
+} from '@nodemelivre/core'
 import type { ImageUploadOptions, ImageUploadResponse, UploadSource } from '@nodemelivre/types'
 
 /** Recursos de imagens. */
@@ -13,9 +17,7 @@ export class Images {
    */
   async upload(file: UploadSource, options: ImageUploadOptions = {}): Promise<ImageUploadResponse> {
     const blob = toBlob(file)
-    if (blob.size === 0) {
-      throw new InputValidationError('Imagem vazia — envie um arquivo com conteúdo')
-    }
+    assertValid(nonEmptyFileSchema, blob)
     const form = new FormData()
     form.append('file', blob, options.filename ?? 'image.bin')
     return this.transport.post('/pictures/items/upload', form)
@@ -26,20 +28,8 @@ export class Images {
    * O Mercado Livre baixa a imagem no próprio CDN.
    */
   async uploadFromUrl(url: string): Promise<ImageUploadResponse> {
-    if (!isHttpUrl(url)) {
-      throw new InputValidationError('URL deve ser http(s) válida para upload por URL')
-    }
+    assertValid(httpUrlSchema, url)
     return this.transport.post('/pictures', { source: url })
-  }
-}
-
-/** Aceita apenas URLs http(s) — evita protocolos locais ou exóticos. */
-function isHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value)
-    return url.protocol === 'http:' || url.protocol === 'https:'
-  } catch {
-    return false
   }
 }
 

@@ -1,4 +1,10 @@
-import { type PageFetcher, paginate, type ResourceTransport, toQuery } from '@nodemelivre/core'
+import {
+  type PageFetcher,
+  paginate,
+  paginationOptions,
+  type ResourceTransport,
+  toQuery,
+} from '@nodemelivre/core'
 import type {
   Question,
   QuestionAnswer,
@@ -69,15 +75,4 @@ export class Questions {
   reply(questionId: number | string, text: string): Promise<QuestionAnswer> {
     return this.answer({ questionId: Number(questionId), text })
   }
-}
-
-/** Monta as opções do `paginate()` sem passar `undefined` explícito. */
-function paginationOptions(
-  params: QuestionSearchParams,
-  signal: AbortSignal | undefined,
-): { limit?: number; signal?: AbortSignal } {
-  const options: { limit?: number; signal?: AbortSignal } = {}
-  if (params.limit !== undefined) options.limit = params.limit
-  if (signal !== undefined) options.signal = signal
-  return options
 }

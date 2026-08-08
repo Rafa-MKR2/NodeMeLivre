@@ -1,5 +1,11 @@
-import { type QueryParams, type ResourceTransport, toQuery } from '@nodemelivre/core'
-import { InputValidationError } from '@nodemelivre/errors'
+import {
+  assertValid,
+  makeSchema,
+  type QueryParams,
+  type ResourceTransport,
+  toQuery,
+  type ValidationSchema,
+} from '@nodemelivre/core'
 import type { Message, MessageSendInput, MessageUser } from '@nodemelivre/types'
 
 /** Parâmetros da listagem de mensagens de um pack. */
@@ -10,6 +16,17 @@ export interface MessagesListParams {
 
 /** Limite de caracteres do texto de uma mensagem imposto pela API. */
 export const MESSAGE_TEXT_MAX_LENGTH = 350
+
+/** Schema do texto de mensagem (falha rápido antes de enviar à API). */
+const messageTextSchema: ValidationSchema<string> = makeSchema((value) => {
+  if (typeof value !== 'string') return ['texto da mensagem deve ser uma string']
+  if (value.length > MESSAGE_TEXT_MAX_LENGTH) {
+    return [
+      `Texto da mensagem excede o limite de ${MESSAGE_TEXT_MAX_LENGTH} caracteres (recebidos: ${value.length})`,
+    ]
+  }
+  return []
+})
 
 /**
  * Envelope de uma conversa do chat pós-venda.
@@ -72,11 +89,7 @@ export class Messages {
 
   /** Envia uma mensagem ao comprador. Máximo de 350 caracteres. */
   async send(input: MessageSendInput): Promise<Message> {
-    if (input.text.length > MESSAGE_TEXT_MAX_LENGTH) {
-      throw new InputValidationError(
-        `Texto da mensagem excede o limite de ${MESSAGE_TEXT_MAX_LENGTH} caracteres (recebidos: ${input.text.length})`,
-      )
-    }
+    assertValid(messageTextSchema, input.text)
     return this.transport.post('/messages', input, { query: { tag: 'post_sale' } })
   }
 }

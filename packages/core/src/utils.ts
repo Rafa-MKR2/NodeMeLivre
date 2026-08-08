@@ -84,6 +84,43 @@ export async function mapWithConcurrency<T, R>(
   return results
 }
 
+/**
+ * Sleep com suporte a cancelamento via `AbortSignal`.
+ *
+ * Se o signal disparar durante a espera, a promise rejeita (com o `reason`
+ * do signal se for `Error`, senão um `AbortError`). Sem signal, aguarda
+ * `ms` milissegundos — mesmo contrato usado por operações de polling.
+ */
+export function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onAbort = (): void => {
+      clearTimeout(timer)
+      reject(signal?.reason instanceof Error ? signal.reason : toAbortError(signal?.reason))
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    if (signal !== undefined) {
+      if (signal.aborted) {
+        onAbort()
+        return
+      }
+      signal.addEventListener('abort', onAbort, { once: true })
+    }
+  })
+}
+
+function toAbortError(reason: unknown): Error {
+  if (typeof DOMException === 'function') {
+    return new DOMException('Operação cancelada', 'AbortError')
+  }
+  const error = new Error('Operação cancelada')
+  error.name = 'AbortError'
+  if (reason !== undefined) error.cause = reason
+  return error
+}
+
 /** Gera um token aleatório seguro para state OAuth. */
 export function generateStateToken(): string {
   const array = new Uint8Array(32)

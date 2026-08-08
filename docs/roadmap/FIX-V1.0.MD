@@ -36,7 +36,7 @@ Status dos problemas identificados
 | 5 | Tratamento de configuração | Implementado — `ConfigurationError` com mensagens claras (SDK e OAuthClient) |
 | 6 | Objetos parcialmente válidos | Implementado — `deepOmitEmpty` envia somente propriedades válidas (crash com `null` corrigido + testes) |
 | 7 | Logs redundantes | Implementado — `DeduplicatingLogger` centraliza e deduplica |
-| 8 | Hardening HTTP | Implementado — `securityHeaders` padrão `false` + nota de segurança no README |
+| 8 | Hardening HTTP | Implementado — headers de resposta removidos por completo (opção `securityHeaders` deletada) + nota de segurança no README |
 | 9 | UX | Implementado — chat sem destinatário não permite envio (com aviso), ações com loading/estados claros |
 
 ### Refinamentos de robustez adicionados na série (dogfooding do painel)
@@ -51,6 +51,10 @@ Além dos problemas acima, o dogfooding contínuo do painel administrativo gerou
 | D | **Webhook por vendedor** — `Webhooks.verifyForUser(payload, appId, userId)` valida `application_id` E `user_id` | Implementado — painel ignora notificações de outro vendedor com `200 { ok, ignored }` (evita retry do ML sem processar) |
 | E | **Cobertura de rotas HTTP** — testes de integração reais (servidor + `fetch`) com o SDK mockado | Implementado — 10 testes: webhook (200/ignored/503), `/from-url` (201/400/401), export SSE (stream/done/abort/401) |
 | F | **`Orders.list()`** — paginação assíncrona (`for await`) + `AbortSignal` no resource `orders` | Implementado — reusa `paginate()` do core; testes de páginas/limit/signal/abort |
+| H | **Validação centralizada por schemas (Fase 2)** — mini-DSL zero-dep em `@nodemelivre/core` + schemas de domínio (`itemInputCreateSchema`, `itemInputPartialSchema`, `orderSearchParamsSchema`); `assertValidItemInput` e validações inline de messages/images eliminados (mensagens preservadas, testáveis em isolamento) | Implementado — ADR-0013; `schemas.test.ts` com 26 testes |
+| I | **Testes de integração reais (Fase 4)** — `MockMercadoLivreServer` (`node:http`, zero-dep) em `@nodemelivre/core/test-utils`; contrato HTTP (método/path/query/headers), retry 429/5xx, rate limit por recurso, timeout, network partition e refresh 401; SDK completo por HTTP real (OAuth PKCE + `FileTokenStore` + multi-instância) | Implementado — `packages/http/src/integration.test.ts` (14 testes) + `packages/sdk/src/integration.test.ts` (3 testes) |
+| J | **Chaos tests (Fase 4)** — `chaos()` no mock: `failureRate`/`failStatus` (instabilidade intermitente), `latencyMs`/`jitterMs` (latência variável) e partição por endpoint (prefixo), com `random` injetável para determinismo; degradação parcial validada com `parallel`/`parallelBestEffort`/`ResilientTransport` (painel com stats `null` em vez de 500) | Implementado — `packages/http/src/chaos.test.ts` (7 testes) |
+| K | **Integração dos fluxos nível 3** — `items.createAndPublish` (cria + publica, fail fast de validação), `orders.waitUntilPaid` (polling real: já pago, paga após N, `PollingTimeoutError`, `AbortSignal` → AbortError) e `questions.reply` (POST `/answers` com `question_id` numérico) por HTTP real autenticado | Implementado — `packages/sdk/src/level3.integration.test.ts` (9 testes) |
 | G | **`Questions.list()`** — idem no resource `questions` (normaliza resposta `questions`→`results`) | Implementado — `QuestionSearchParams` ganhou `offset`/`limit`; testes de páginas/limit/signal/abort |
 
 Objetivos da série v1.0.x
@@ -273,7 +277,7 @@ Referrer-Policy
 
 Documentar limites atuais.
 
-> **Status: Implementado (decisão de design).** O SDK não injeta headers de segurança (CSP, `X-Frame-Options`, `X-Content-Type-Options`...) em requisições — eles pertencem ao servidor do integrador. `securityHeaders` agora é `false` por padrão e o README documenta a recomendação (Helmet) e os limites do rate-limit por recurso.
+> **Status: Implementado.** O SDK não injeta headers de segurança (CSP, `X-Frame-Options`, `X-Content-Type-Options`...) em requisições — eles pertencem ao servidor do integrador (use Helmet no seu app). A opção `securityHeaders` (opt-in legado) foi **removida por completo**, e o README documenta a recomendação e os limites do rate-limit por recurso.
 
 9. UX
 

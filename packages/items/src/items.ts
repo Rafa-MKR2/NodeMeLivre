@@ -1,12 +1,15 @@
 import {
+  assertValid,
   deepOmitEmpty,
+  itemInputCreateSchema,
+  itemInputPartialSchema,
   mapWithConcurrency,
   type PageFetcher,
   paginate,
+  paginationOptions,
   type ResourceTransport,
   toQuery,
 } from '@nodemelivre/core'
-import { InputValidationError } from '@nodemelivre/errors'
 import type {
   Item,
   ItemDescription,
@@ -32,13 +35,13 @@ export class Items {
 
   /** Cria um anúncio novo. */
   async create(input: ItemInput): Promise<Item> {
-    assertValidItemInput(input)
+    assertValid(itemInputCreateSchema, input)
     return this.transport.post('/items', deepOmitEmpty(input))
   }
 
   /** Atualiza campos do anúncio. */
   async update(itemId: string, changes: Partial<ItemInput>): Promise<Item> {
-    assertValidItemInput(changes, { partial: true })
+    assertValid(itemInputPartialSchema, changes)
     return this.transport.put(`/items/${itemId}`, deepOmitEmpty(changes))
   }
 
@@ -178,58 +181,4 @@ async function resolveSellerItems(
   return mapWithConcurrency(ids, ITEM_RESOLUTION_CONCURRENCY, (id) =>
     transport.get<Item>(`/items/${id}`),
   )
-}
-
-/**
- * Valida campos essenciais antes de enviar à API (falha rápido, sem payload
- * parcialmente inválido — mesmo padrão de `InputValidationError` de
- * messages/images). Em atualização parcial, valida apenas os campos enviados.
- */
-function assertValidItemInput(
-  input: Partial<ItemInput>,
-  { partial = false }: { partial?: boolean } = {},
-): void {
-  if (input.title !== undefined && (typeof input.title !== 'string' || input.title.trim() === '')) {
-    throw new InputValidationError('title deve ser uma string não vazia')
-  }
-  if (
-    input.family_name !== undefined &&
-    (typeof input.family_name !== 'string' || input.family_name.trim() === '')
-  ) {
-    throw new InputValidationError('family_name deve ser uma string não vazia')
-  }
-  if (input.title !== undefined && input.family_name !== undefined) {
-    throw new InputValidationError(
-      'title e family_name são mutuamente exclusivos: envie apenas um (modelo User Product)',
-    )
-  }
-  if (input.price !== undefined && (!Number.isFinite(input.price) || input.price <= 0)) {
-    throw new InputValidationError('price deve ser um número positivo')
-  }
-  if (
-    input.available_quantity !== undefined &&
-    (!Number.isInteger(input.available_quantity) || input.available_quantity < 0)
-  ) {
-    throw new InputValidationError('available_quantity deve ser um inteiro >= 0')
-  }
-  if (!partial) {
-    if (input.title === undefined && input.family_name === undefined) {
-      throw new InputValidationError('title ou family_name é obrigatório na criação')
-    }
-    if (input.price === undefined) throw new InputValidationError('price é obrigatório na criação')
-    if (input.available_quantity === undefined) {
-      throw new InputValidationError('available_quantity é obrigatório na criação')
-    }
-  }
-}
-
-/** Monta as opções do `paginate()` sem passar `undefined` explícito. */
-function paginationOptions(
-  params: ItemSearchParams,
-  signal: AbortSignal | undefined,
-): { limit?: number; signal?: AbortSignal } {
-  const options: { limit?: number; signal?: AbortSignal } = {}
-  if (params.limit !== undefined) options.limit = params.limit
-  if (signal !== undefined) options.signal = signal
-  return options
 }

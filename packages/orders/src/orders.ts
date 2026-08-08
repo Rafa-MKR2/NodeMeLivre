@@ -1,4 +1,13 @@
-import { type PageFetcher, paginate, type ResourceTransport, toQuery } from '@nodemelivre/core'
+import {
+  assertValid,
+  orderSearchParamsSchema,
+  type PageFetcher,
+  paginate,
+  paginationOptions,
+  type ResourceTransport,
+  sleepWithAbort,
+  toQuery,
+} from '@nodemelivre/core'
 import { PollingTimeoutError } from '@nodemelivre/errors'
 import type { Order, OrderItem, OrderSearchParams, OrderSearchResponse } from '@nodemelivre/types'
 
@@ -13,6 +22,7 @@ export class Orders {
 
   /** Busca de vendas por vendedor, comprador, status, etc. */
   search(params: OrderSearchParams = {}): Promise<OrderSearchResponse> {
+    assertValid(orderSearchParamsSchema, params)
     return this.transport.get('/orders/search', { query: toQuery(params) })
   }
 
@@ -29,6 +39,7 @@ export class Orders {
    * quando o signal dispara, sem buscar a página seguinte.
    */
   list(params: OrderSearchParams = {}, signal?: AbortSignal): AsyncGenerator<Order, void, void> {
+    assertValid(orderSearchParamsSchema, params)
     const fetchPage: PageFetcher<Order> = (offset, limit, pageSignal) =>
       this.transport.get<OrderSearchResponse>('/orders/search', {
         query: toQuery({ ...params, offset, limit }),
@@ -67,51 +78,10 @@ export class Orders {
           `Pedido ${orderId} não foi pago dentro de ${timeoutMs}ms (status: ${order.status})`,
         )
       }
-      await sleep(intervalMs, signal)
+      await sleepWithAbort(intervalMs, signal)
       signal?.throwIfAborted()
       order = await this.get(orderId)
     }
     return order
   }
-}
-
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const onAbort = (): void => {
-      clearTimeout(timer)
-      reject(signal?.reason instanceof Error ? signal.reason : abortError(signal?.reason))
-    }
-    const timer = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort)
-      resolve()
-    }, ms)
-    if (signal !== undefined) {
-      if (signal.aborted) {
-        onAbort()
-        return
-      }
-      signal.addEventListener('abort', onAbort, { once: true })
-    }
-  })
-}
-
-function abortError(reason: unknown): Error {
-  if (typeof DOMException === 'function') {
-    return new DOMException('Operação cancelada', 'AbortError')
-  }
-  const error = new Error('Operação cancelada')
-  error.name = 'AbortError'
-  if (reason !== undefined) error.cause = reason
-  return error
-}
-
-/** Monta as opções do `paginate()` sem passar `undefined` explícito. */
-function paginationOptions(
-  params: OrderSearchParams,
-  signal: AbortSignal | undefined,
-): { limit?: number; signal?: AbortSignal } {
-  const options: { limit?: number; signal?: AbortSignal } = {}
-  if (params.limit !== undefined) options.limit = params.limit
-  if (signal !== undefined) options.signal = signal
-  return options
 }

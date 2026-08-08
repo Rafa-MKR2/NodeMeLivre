@@ -349,9 +349,11 @@ export interface ResourceTransport {
 3. **FileTokenStore v2** → Atomic write + file lock + checksum
 
 ### Fase 2: Validação Centralizada (1-2 semanas)
-1. **Schema único** (Zod/Valibot) para `ItemInput`, `OrderSearchParams`, etc.
+1. **Schema único** para `ItemInput`, `OrderSearchParams`, etc.
 2. **Validator middleware** no `ResourceTransport` — valida request ANTES de sair, response AO CHEGAR
 3. **Eliminar** `assertValidItemInput`, validações inline em messages/images
+
+> **Status: 1 e 3 Implementados (2026-08-08).** Mini-DSL zero-dependência em `@nodemelivre/core` (`schemas.ts`) + schemas de domínio (`domain-schemas.ts`), mensagens históricas preservadas, testáveis em isolamento (ADR-0013). O item 2 (validator middleware no `ResourceTransport`) segue planejado — os schemas no core são a fundação para ele.
 
 ### Fase 3: Eliminação de Duplicação (1 semana)
 1. `paginationOptions` → `@nodemelivre/core/utils`
@@ -363,6 +365,8 @@ export interface ResourceTransport {
 2. **Contract tests** — cada resource testa contra schema real
 3. **Chaos tests** — injetar latency, 429, 5xx, network partition
 4. **Multi-instance tests** — 2+ processos compartilhando Redis StateStore
+
+> **Status: Implementado em versão zero-dependência (2026-08-08).** `MockMercadoLivreServer` (`node:http`, sem Docker/Testcontainers) em `@nodemelivre/core/test-utils`; contrato HTTP, retry 429/5xx, rate limit por recurso, timeout, network partition (conexão recusada), refresh 401, fluxo OAuth completo ponta a ponta (incluindo multi-instância PKCE com stores compartilhadas), **fluxos nível 3** (`createAndPublish`, `waitUntilPaid` com polling/timeout/abort, `reply`) e **chaos** (item 3): `chaos()` injeta latência (`latencyMs`/`jitterMs`), instabilidade intermitente (`failureRate`) e partição por endpoint, com `random` injetável; a degradação parcial do SDK é validada com `parallel`/`parallelBestEffort`/`ResilientTransport`. Testcontainers/OpenAPI e chaos em escala de rede (latência real de pacotes) seguem como evolução — a fundação zero-dep cobre os cenários de produção mais comuns.
 
 ### Fase 5: Observabilidade & Resiliência (2 semanas)
 1. **Metrics** no `HttpClient` (latência, error rate, rate-limit remaining)

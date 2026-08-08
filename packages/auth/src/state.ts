@@ -184,22 +184,3 @@ export class OAuthStateStore {
     }
   }
 }
-
-/** Store em memória global (para uso simples). */
-let globalStore: OAuthStateStore | null = null
-
-/** Obtém ou cria o store global. */
-export function getGlobalOAuthStateStore(options?: OAuthStateStoreOptions): OAuthStateStore {
-  if (globalStore === null) {
-    globalStore = new OAuthStateStore(options)
-  }
-  return globalStore
-}
-
-/** Reseta o store global (útil para testes). */
-export function resetGlobalOAuthStateStore(): void {
-  if (globalStore !== null) {
-    globalStore.stop()
-    globalStore = null
-  }
-}

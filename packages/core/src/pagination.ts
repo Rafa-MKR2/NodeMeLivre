@@ -31,6 +31,23 @@ export type PageFetcher<T> = (
 ) => Promise<PaginatedResponse<T>>
 
 /**
+ * Monta as opções do `paginate()` a partir dos params de busca, sem passar
+ * `undefined` explícito (mantém o payload de cada página enxuto).
+ *
+ * Compartilhado entre resources paginados (items, orders, questions) — antes
+ * duplicado em cada pacote.
+ */
+export function paginationOptions(
+  params: { limit?: number },
+  signal?: AbortSignal,
+): { limit?: number; signal?: AbortSignal } {
+  const options: { limit?: number; signal?: AbortSignal } = {}
+  if (params.limit !== undefined) options.limit = params.limit
+  if (signal !== undefined) options.signal = signal
+  return options
+}
+
+/**
  * Itera todos os resultados de uma busca paginada, item a item.
  *
  * - Página vazia ou fim do `paging.total` encerra a iteração.

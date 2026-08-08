@@ -8,6 +8,10 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Adicionado
 
+- **Chaos testing (Fase 4 do ANALISE_QUALIDADE_TECNICA):** `MockMercadoLivreServer.chaos()` injeta falhas sobre as respostas — `failureRate`/`failStatus` (instabilidade intermitente), `latencyMs`/`jitterMs` (latência variável) e partição por endpoint (prefixo do path; o mais específico vence), com fonte aleatória injetável para determinismo. `packages/http/src/chaos.test.ts` (7 testes) valida a **degradação parcial** do SDK com `parallel`/`parallelBestEffort`/`ResilientTransport` contra um servidor com `/items` fora do ar e `/orders` lento — o que funciona segue, o que falha vira erro parcial (padrão do painel: stats `null` em vez de 500).
+- **Integração dos fluxos nível 3 (Fase 4):** `packages/sdk/src/level3.integration.test.ts` (9 testes) exercita por HTTP real autenticado `items.createAndPublish` (cria + publica; input inválido falha antes de chamar a API), `orders.waitUntilPaid` (polling real: já pago, paga após N chamadas, `PollingTimeoutError` e `AbortSignal` → AbortError) e `questions.reply` (`POST /answers` com `question_id` numérico).
+- **Suite de testes de integração real (Fase 4 do ANALISE_QUALIDADE_TECNICA):** `MockMercadoLivreServer` (mock server HTTP em `node:http`, zero dependências) em `@nodemelivre/core/test-utils`. `packages/http/src/integration.test.ts` cobre o contrato HTTP (método/path/query/headers/Authorization), retry 429/5xx com backoff real, rate limit por recurso (espera o reset), timeout, network partition (conexão recusada) e refresh 401 ponta a ponta. `packages/sdk/src/integration.test.ts` exercita o SDK completo por HTTP real: fluxo OAuth (PKCE) com persistência em `FileTokenStore`, refresh em 401 com o `TokenManager` e code_verifier compartilhado entre instâncias (multi-instância).
+- **Validação centralizada por schemas (Fase 2 do ANALISE_QUALIDADE_TECNICA):** mini-DSL de validação zero-dependência em `@nodemelivre/core` (`string`, `number`, `enumOf`, `optional`, `arrayOf`, `object` + `refinements`, `assertValid`, `makeSchema`) e schemas de domínio (`itemInputCreateSchema`, `itemInputPartialSchema`, `orderSearchParamsSchema`, `httpUrlSchema`, `nonEmptyFileSchema`) como fonte única da verdade. `assertValidItemInput` e as validações inline de messages/images foram eliminados; as mensagens de erro históricas foram preservadas. `@nodemelivre/core` agora depende de `@nodemelivre/types` (sem ciclo) e o build do root foi reordenado (`types` antes de `core`). ADR-0013.
 - `mapWithConcurrency()` em `@nodemelivre/core`: aplica um mapper respeitando limite de execuções paralelas, preservando a ordem — usado pela resolução de itens do vendedor.
 - `Items.list`/`listBySeller` e `paginate()` aceitam `AbortSignal`: cancelamento antecipado da iteração e da requisição em voo (o `for await` rejeita com AbortError).
 - `Images.uploadFromUrl(url)` em `@nodemelivre/images`: registra imagem a partir de uma URL pública (`POST /pictures`), validando protocolo http(s) — sem depender do Nível 1 do SDK.
@@ -30,8 +34,15 @@ O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o 
 
 ### Alterado
 
-- `HttpClient`: headers de segurança (CSP, `X-Frame-Options`, `X-Content-Type-Options`...) deixam de ser injetados em requests por padrão — `securityHeaders` agora é `false` (headers de resposta pertencem ao servidor do integrador).
+- `DeduplicatingLogger`: limpeza periódica do cache de deduplicação — remove entradas expiradas emitindo o resumo dos logs suprimidos na expiração, e aplica um limite máximo de entradas (`maxEntries`, padrão 10.000) para que mensagens únicas (ex.: `requestId` diferentes) não cresçam a memória sem limite. Novo `stop()` para interromper o timer.
+- `paginate()` e resources paginados: `paginationOptions` e `sleepWithAbort` centralizados em `@nodemelivre/core` e reutilizados por items/orders/questions — fim da duplicação (3 cópias de `paginationOptions`, 2 de `sleep`).
+- **Validação mais estrita (fail fast no cliente):** `Orders.search/list` agora rejeitam `limit` não positivo/inteiro, `offset` negativo e `status` fora da union antes de chamar a API; `Messages.send` rejeita `text` não-string (antes, `undefined > 350` deixava passar); `Items` rejeita `attributes`/`pictures` fora do shape — payloads que iriam falhar na API agora falham com `InputValidationError` tipado.
 - `RateLimiter`: tracking por recurso (`método:recurso`) em vez de path literal, e parsing robusto de `X-Rate-Limit-Reset` (epoch ms/segundos ou janela restante em segundos relativos).
+
+### Removido (breaking)
+
+- `HttpClientOptions.securityHeaders` e `SECURITY_HEADERS`: headers de resposta (CSP, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`) nunca devem ser enviados como headers de requisição — a opção que permitia isso foi removida por completo (o README documenta a recomendação de usar Helmet no seu servidor).
+- `getGlobalOAuthStateStore`/`resetGlobalOAuthStateStore`: o singleton global de `OAuthStateStore` foi removido — instancie e injete seu próprio store (`new OAuthStateStore(...)` via `createMercadoLivre`/`OAuthClient`), habilitando multi-tenancy e opções por instância.
 
 ### Adicionado
 

@@ -10,8 +10,8 @@ import { OAuthStateStore } from './state.js'
 import { FileTokenStore, InMemoryTokenStore } from './token.js'
 
 function createMockFetch() {
-  const responses = new Map<string, any>()
-  const createJsonResponse = (data: any, status = 200) => {
+  const responses = new Map<string, unknown>()
+  const createJsonResponse = (data: unknown, status = 200) => {
     const jsonStr = JSON.stringify(data)
     return {
       status,
@@ -28,7 +28,7 @@ function createMockFetch() {
       const path = new URL(url).pathname
       const body = init?.body ? JSON.parse(init.body as string) : {}
       const key = `${path}:${JSON.stringify(body)}`
-      if (responses.has(key)) return responses.get(key)
+      if (responses.has(key)) return responses.get(key) as Response
       if (path === '/oauth/token') {
         if (body.grant_type === 'authorization_code' && !body.code_verifier) {
           return createJsonResponse(
@@ -62,7 +62,7 @@ function createMockFetch() {
       }
       throw new Error(`No mock for ${path}`)
     },
-    setResponse: (path: string, body: any, response: any) => {
+    setResponse: (path: string, body: unknown, response: unknown) => {
       const key = `${path}:${JSON.stringify(body)}`
       responses.set(key, response)
     },

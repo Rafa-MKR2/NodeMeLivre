@@ -160,15 +160,6 @@ describe('HttpClient.request', () => {
     await client().get('/users/me')
   })
 
-  it('deve injetar headers de segurança quando securityHeaders é true', async () => {
-    mockFetch((_url, init) => {
-      const headers = new Headers(init.headers)
-      expect(headers.get('x-frame-options')).toBe('DENY')
-      return json({ ok: true })
-    })
-    await client({ securityHeaders: true }).get('/users/me')
-  })
-
   it('deve aplicar retry em 429 e ter sucesso na próxima tentativa', async () => {
     let calls = 0
     const spy = mockFetch(() => {

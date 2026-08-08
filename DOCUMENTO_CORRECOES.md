@@ -14,6 +14,20 @@ Todos os testes atuais passam (222/222), mas **não cobrem cenários multi-inst�
 
 ---
 
+## ✅ Status de Resolução (2026-08-08)
+
+| Item | Status | Onde |
+|------|--------|------|
+| P0-1 PKCE code_verifier multi-instância | ✅ Resolvido | `code_verifier` no `metadata` do `OAuthStateStore` + fallback in-memory |
+| P0-2 FileTokenStore não-atômico | ✅ Resolvido | `FileTokenStore` v2: escrita atômica (temp+rename), file lock, checksum, backup, lease |
+| P1-3 Singleton global OAuthStateStore | ✅ Resolvido | `getGlobalOAuthStateStore`/`resetGlobalOAuthStateStore` **removidos** (breaking) |
+| P1-4 Headers de segurança em requests | ✅ Resolvido | `securityHeaders` e `SECURITY_HEADERS` **removidos** (breaking) |
+| P2-5 DeduplicatingLogger memory leak | ✅ Resolvido | cleanup periódico + `maxEntries` + `stop()` |
+| P2-6 TokenManager race condition | ✅ Resolvido | `compareAndSet` + lease distribuído no `doRefresh` |
+| P4-7 RateLimiter promises órfãs | ✅ Mitigado | `try/finally` já garante a remoção da espera single-flight |
+
+---
+
 ## 🔴 P0 - CRÍTICA 1: PKCE Code Verifier Perdido em Deploy Multi-Instância
 
 ### Localização
