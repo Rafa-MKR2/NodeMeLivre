@@ -50,6 +50,20 @@ describe('HttpClient.request', () => {
     expect(spy).toHaveBeenCalledTimes(1)
   })
 
+  it('deve passar FormData direto sem serializar como JSON', async () => {
+    const spy = mockFetch((_url, init) => {
+      expect(init.method).toBe('POST')
+      expect(init.body).toBeInstanceOf(FormData)
+      return json({ ok: true })
+    })
+
+    const form = new FormData()
+    form.append('file', new Blob(['bytes']), 'foto.jpg')
+
+    await client().post('/pictures/items/upload', form)
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
   it('deve enviar o Authorization quando há token provider', async () => {
     mockFetch((_url, init) => {
       const headers = new Headers(init.headers)
@@ -100,6 +114,50 @@ describe('HttpClient.request', () => {
     expect(result.id).toBe('MLB1')
     expect(refreshed).toHaveBeenCalledTimes(1)
     expect(spy).toHaveBeenCalledTimes(2)
+  })
+
+  it('deve renovar o token em 401 mesmo com retry desativado', async () => {
+    let calls = 0
+    const spy = mockFetch(() => {
+      calls += 1
+      if (calls === 1) return json({ message: 'expired' }, 401)
+      return json({ id: 'MLB1' })
+    })
+
+    const refreshed = vi.fn(async () => {})
+    const result = await client({
+      auth: provider('token-old', refreshed),
+      retry: { maxRetries: 0 },
+    }).get<{ id: string }>('/items/MLB1')
+
+    expect(result.id).toBe('MLB1')
+    expect(refreshed).toHaveBeenCalledTimes(1)
+    expect(spy).toHaveBeenCalledTimes(2)
+  })
+
+  it('deve lançar o erro real do 401 quando o refresh esgota as tentativas', async () => {
+    mockFetch(() => json({ message: 'expired' }, 401))
+    const refreshed = vi.fn(async () => {})
+    const err = await client({
+      auth: provider('token-old', refreshed),
+      retry: { maxRetries: 0 },
+    })
+      .get('/users/me')
+      .catch((e) => e)
+
+    expect(err).toBeInstanceOf(UnauthorizedError)
+    expect((err as UnauthorizedError).status).toBe(401)
+    expect(refreshed).toHaveBeenCalledTimes(1)
+  })
+
+  it('não deve injetar headers de resposta por padrão', async () => {
+    mockFetch((_url, init) => {
+      const headers = new Headers(init.headers)
+      expect(headers.get('x-frame-options')).toBeNull()
+      expect(headers.get('x-content-type-options')).toBeNull()
+      return json({ ok: true })
+    })
+    await client().get('/users/me')
   })
 
   it('deve aplicar retry em 429 e ter sucesso na próxima tentativa', async () => {
@@ -166,5 +224,26 @@ describe('HttpClient.request', () => {
     mockFetch(() => ({ status: 204, body: undefined }))
     const result = await client().delete<undefined>('/items/MLB1')
     expect(result).toBeUndefined()
+  })
+
+  it('deve devolver ArrayBuffer com responseType arraybuffer', async () => {
+    const pdf = new Uint8Array([37, 80, 68, 70]) // "%PDF"
+    const spy = vi.fn(async () => new Response(pdf, { status: 200 }))
+    vi.stubGlobal('fetch', spy)
+
+    const result = await client().get<ArrayBuffer>('/shipment_labels', {
+      responseType: 'arraybuffer',
+    })
+
+    expect(result).toBeInstanceOf(ArrayBuffer)
+    expect(new Uint8Array(result)).toEqual(pdf)
+  })
+
+  it('deve devolver texto com responseType text', async () => {
+    const spy = vi.fn(async () => new Response('conteúdo plano', { status: 200 }))
+    vi.stubGlobal('fetch', spy)
+
+    const result = await client().get<string>('/endpoint', { responseType: 'text' })
+    expect(result).toBe('conteúdo plano')
   })
 })

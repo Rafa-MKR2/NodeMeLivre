@@ -1,6 +1,6 @@
 {
   "name": "@nodemelivre/questions",
-  "version": "0.1.0",
+  "version": "1.0.0-beta.1",
   "description": "Recursos de perguntas (questions) do NodeMeLivre para a API do Mercado Livre",
   "type": "module",
   "main": "./dist/index.js",
@@ -25,5 +25,11 @@
   "dependencies": {
     "@nodemelivre/core": "*",
     "@nodemelivre/types": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@nodemelivre/auth",
-  "version": "0.1.0",
+  "version": "1.0.0-beta.1",
   "description": "OAuth2 e gerenciamento de tokens do NodeMeLivre para o Mercado Livre",
   "type": "module",
   "main": "./dist/index.js",
@@ -26,5 +26,11 @@
     "@nodemelivre/core": "*",
     "@nodemelivre/errors": "*",
     "@nodemelivre/http": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
   }
 }

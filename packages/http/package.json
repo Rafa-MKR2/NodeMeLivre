@@ -1,6 +1,6 @@
 {
   "name": "@nodemelivre/http",
-  "version": "0.1.0",
+  "version": "1.0.0-beta.1",
   "description": "Cliente HTTP com retry, rate limit e timeout do NodeMeLivre",
   "type": "module",
   "main": "./dist/index.js",
@@ -25,5 +25,11 @@
   "dependencies": {
     "@nodemelivre/core": "*",
     "@nodemelivre/errors": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
   }
 }

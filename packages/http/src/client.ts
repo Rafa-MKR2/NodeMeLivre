@@ -1,14 +1,13 @@
 import { EventEmitter } from 'node:events'
 import { type Logger, silentLogger } from '@nodemelivre/core'
 import { ApiError, NetworkError, RateLimitError, toApiError } from '@nodemelivre/errors'
-import type { RateLimiter } from './rate-limit.js'
+import { type RateLimiter, rateLimitKey } from './rate-limit.js'
 import {
   DEFAULT_RETRY,
   defaultShouldRetry,
   exponentialBackoff,
   type RetryOptions,
 } from './retry.js'
-
 export const MERCADO_LIVRE_BASE_URL = 'https://api.mercadolibre.com'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD'
@@ -49,6 +48,8 @@ export interface HttpClientRequest {
   auth?: boolean
   /** Aplica retry (padrão: true). */
   retry?: boolean
+  /** Formato esperado do corpo da resposta. Padrão: `json`. */
+  responseType?: 'json' | 'text' | 'arraybuffer'
 }
 
 export interface HttpClientOptions {
@@ -83,7 +84,7 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
     super()
     this.baseUrl = options.baseUrl ?? MERCADO_LIVRE_BASE_URL
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 30_000
-    this.defaultHeaders = options.defaultHeaders ?? {}
+    this.defaultHeaders = { ...options.defaultHeaders }
     this.fetchImpl = options.fetchImpl ?? fetch
     this.logger = options.logger ?? silentLogger
     this.delay = options.delay ?? ((ms) => new Promise((r) => setTimeout(r, ms)))
@@ -130,7 +131,9 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
   async request<T>(request: HttpClientRequest): Promise<T> {
     const method = request.method ?? 'GET'
     const url = buildUrl(this.baseUrl, request.path, request.query)
-    const maxAttempts = request.retry === false ? 1 : this.retry.maxRetries + 1
+    // A retentativa pós-refresh (401) não consome o orçamento de retry.
+    const refreshSlots = this.auth?.refresh !== undefined ? 1 : 0
+    const maxAttempts = (request.retry === false ? 1 : this.retry.maxRetries + 1) + refreshSlots
 
     let token: string | undefined
     if (request.auth !== false && this.auth !== undefined) {
@@ -138,13 +141,15 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
     }
     let headers = this.buildHeaders(request.headers, token)
     let refreshed = false
+    let lastError: ApiError | undefined
 
     // Emit request event
     this.emit('request', request)
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (this.rateLimiter !== undefined) {
-        const state = this.rateLimiter.stateOf(request.path)
+        const key = rateLimitKey(method, request.path)
+        const state = this.rateLimiter.stateOf(key)
         if (
           state?.remaining !== undefined &&
           state.remaining === 0 &&
@@ -152,7 +157,7 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
         ) {
           this.emit('rateLimit', state.resetAt, request)
         }
-        await this.rateLimiter.waitIfNeeded(request.path)
+        await this.rateLimiter.waitIfNeeded(key)
       }
 
       let response: Response
@@ -181,18 +186,19 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
       }
 
       if (this.rateLimiter !== undefined) {
-        this.rateLimiter.update(request.path, response.headers)
+        this.rateLimiter.update(rateLimitKey(method, request.path), response.headers)
       }
 
       // Emit response event for all responses
       this.emit('response', response, request)
 
       if (response.ok) {
-        return (await parseBody(response)) as T
+        return (await parseBody(response, request.responseType)) as T
       }
 
       const body = await tryReadBody(response)
       const apiError = toApiError(response.status, body, response.headers)
+      lastError = apiError
       this.logger.debug({ err: apiError, url: url.toString() }, 'erro da api')
       this.emit('httpError', apiError, request)
 
@@ -219,10 +225,10 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
       throw apiError
     }
 
-    throw new ApiError({
-      message: 'Número máximo de tentativas excedido',
-      status: 0,
-    })
+    // Nunca deve chegar aqui sem um erro real: quando o loop se esgota via
+    // `continue` (ex.: refresh de token no último attempt), re-lançamos o
+    // último erro da API em vez de um erro sintético.
+    throw lastError ?? new ApiError({ message: 'Número máximo de tentativas excedido', status: 0 })
   }
 
   private buildHeaders(headers: Record<string, string> | undefined, token?: string): Headers {
@@ -247,9 +253,13 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
     const init: RequestInit = { method, headers }
 
     if (body !== undefined) {
-      init.body = JSON.stringify(body)
-      if (!headers.has('content-type')) {
-        headers.set('content-type', JSON_CONTENT_TYPE)
+      if (isBodyInit(body)) {
+        init.body = body as NonNullable<RequestInit['body']>
+      } else {
+        init.body = JSON.stringify(body)
+        if (!headers.has('content-type')) {
+          headers.set('content-type', JSON_CONTENT_TYPE)
+        }
       }
     }
 
@@ -273,10 +283,6 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
     }
     return exponentialBackoff(attempt, this.retry)
   }
-
-  async getBearerToken(): Promise<string | undefined> {
-    return this.auth?.getToken()
-  }
 }
 
 function buildUrl(baseUrl: string, path: string, query: HttpClientRequest['query']): URL {
@@ -289,8 +295,13 @@ function buildUrl(baseUrl: string, path: string, query: HttpClientRequest['query
   return url
 }
 
-async function parseBody(response: Response): Promise<unknown> {
+async function parseBody(
+  response: Response,
+  responseType: HttpClientRequest['responseType'] = 'json',
+): Promise<unknown> {
   if (response.status === 204) return undefined
+  if (responseType === 'arraybuffer') return response.arrayBuffer()
+  if (responseType === 'text') return response.text()
   const text = await response.text()
   if (text === '') return undefined
   return tryParseJson(text) ?? text
@@ -308,4 +319,15 @@ function tryParseJson(text: string): unknown | undefined {
   } catch {
     return undefined
   }
+}
+
+function isBodyInit(body: unknown): boolean {
+  return (
+    typeof body === 'string' ||
+    body instanceof Blob ||
+    body instanceof FormData ||
+    body instanceof URLSearchParams ||
+    body instanceof ArrayBuffer ||
+    ArrayBuffer.isView(body)
+  )
 }

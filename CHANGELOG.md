@@ -4,6 +4,142 @@ Todas as mudanças notáveis do monorepo serão documentadas neste arquivo.
 
 O formato segue [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto adere ao [SemVer](https://semver.org/lang/pt-BR/). Veja o [processo de release](docs/releases/README.md).
 
+## [Não lançado]
+
+### Adicionado
+
+- **Chaos testing (Fase 4 do ANALISE_QUALIDADE_TECNICA):** `MockMercadoLivreServer.chaos()` injeta falhas sobre as respostas — `failureRate`/`failStatus` (instabilidade intermitente), `latencyMs`/`jitterMs` (latência variável) e partição por endpoint (prefixo do path; o mais específico vence), com fonte aleatória injetável para determinismo. `packages/http/src/chaos.test.ts` (7 testes) valida a **degradação parcial** do SDK com `parallel`/`parallelBestEffort`/`ResilientTransport` contra um servidor com `/items` fora do ar e `/orders` lento — o que funciona segue, o que falha vira erro parcial (padrão do painel: stats `null` em vez de 500).
+- **Integração dos fluxos nível 3 (Fase 4):** `packages/sdk/src/level3.integration.test.ts` (9 testes) exercita por HTTP real autenticado `items.createAndPublish` (cria + publica; input inválido falha antes de chamar a API), `orders.waitUntilPaid` (polling real: já pago, paga após N chamadas, `PollingTimeoutError` e `AbortSignal` → AbortError) e `questions.reply` (`POST /answers` com `question_id` numérico).
+- **Suite de testes de integração real (Fase 4 do ANALISE_QUALIDADE_TECNICA):** `MockMercadoLivreServer` (mock server HTTP em `node:http`, zero dependências) em `@nodemelivre/core/test-utils`. `packages/http/src/integration.test.ts` cobre o contrato HTTP (método/path/query/headers/Authorization), retry 429/5xx com backoff real, rate limit por recurso (espera o reset), timeout, network partition (conexão recusada) e refresh 401 ponta a ponta. `packages/sdk/src/integration.test.ts` exercita o SDK completo por HTTP real: fluxo OAuth (PKCE) com persistência em `FileTokenStore`, refresh em 401 com o `TokenManager` e code_verifier compartilhado entre instâncias (multi-instância).
+- **Validação centralizada por schemas (Fase 2 do ANALISE_QUALIDADE_TECNICA):** mini-DSL de validação zero-dependência em `@nodemelivre/core` (`string`, `number`, `enumOf`, `optional`, `arrayOf`, `object` + `refinements`, `assertValid`, `makeSchema`) e schemas de domínio (`itemInputCreateSchema`, `itemInputPartialSchema`, `orderSearchParamsSchema`, `httpUrlSchema`, `nonEmptyFileSchema`) como fonte única da verdade. `assertValidItemInput` e as validações inline de messages/images foram eliminados; as mensagens de erro históricas foram preservadas. `@nodemelivre/core` agora depende de `@nodemelivre/types` (sem ciclo) e o build do root foi reordenado (`types` antes de `core`). ADR-0013.
+- `mapWithConcurrency()` em `@nodemelivre/core`: aplica um mapper respeitando limite de execuções paralelas, preservando a ordem — usado pela resolução de itens do vendedor.
+- `Items.list`/`listBySeller` e `paginate()` aceitam `AbortSignal`: cancelamento antecipado da iteração e da requisição em voo (o `for await` rejeita com AbortError).
+- `Images.uploadFromUrl(url)` em `@nodemelivre/images`: registra imagem a partir de uma URL pública (`POST /pictures`), validando protocolo http(s) — sem depender do Nível 1 do SDK.
+- `Webhooks.verifyForUser(payload, applicationId, expectedUserId)` em `@nodemelivre/webhooks`: valida `application_id` e o `user_id` da notificação contra o vendedor esperado — controle real contra payloads forjados (o ML não usa HMAC).
+- `Orders.list(params, signal)` em `@nodemelivre/orders` e `Questions.list(params, signal)` em `@nodemelivre/questions`: paginação assíncrona (`for await`) reutilizando `paginate()` do core, com `AbortSignal` opcional — o `for await` rejeita com AbortError sem buscar a página seguinte. `QuestionSearchParams` ganhou `offset`/`limit`; `Questions.list` normaliza a resposta (`questions` → `results`).
+
+### Corrigido
+
+- `Items.searchBySeller`/`listBySeller`: resolução de IDs em itens completos agora respeita um limite de concorrência (10) em vez de `Promise.all` sem cap — evita rajada de requisições que estoura o rate limit em contas com milhares de anúncios.
+
+- `HttpClient`: a retentativa pós-refresh (401) não consome o orçamento de retry — `retry: false` ainda renova o token. Quando o loop se esgota, o **erro real da API** é re-lançado em vez de um `ApiError` sintético com `status 0`.
+- `DeduplicatingLogger`: o resumo de logs suprimidos agora é emitido quando a janela expira (antes o caminho era inalcançável e o resumo nunca aparecia).
+- `DeduplicatingLogger`: a entry no cache é sempre substituída por uma referência nova (imutável) — nunca mutada no lugar — eliminando corridas de concorrência sobre o objeto compartilhado. O resumo emite a mensagem original (antes era reconstruída do key via `split(':')`, quebrando mensagens com dois-pontos).
+- `RateLimiter`: espera single-flight — requisições concorrentes no mesmo recurso esgotado compartilham uma única espera até o reset (evita "thundering herd" no reset) e o estado esgotado é limpo ao fim da janela.
+- `deepOmitEmpty`: preserva `null` intencional — enviar `null` em `PUT /items` continua limpando o campo (antes era removido do payload).
+- `deepOmitEmpty`: **crash com `null` corrigido** (`Object.keys(null)` em qualquer `null` aninhado) — bug encontrado pelo dogfooding, coberto por testes novos.
+- **Build publicável quebrado (crítico):** os `tsconfig.build.json` herdavam os `paths` dos packages irmãos e geravam `dist` aninhado — o entrypoint `dist/index.js`/`dist/index.d.ts` ficava congelado/ausente. `@nodemelivre/images`, `@nodemelivre/messages` e `@nodemelivre/webhooks` nem tinham entrypoint; os demais expunham código sem nível 3/hardening. Todos os 14 packages agora buildam com `rootDir: "src"` e `paths: {}`, validado por smoke test de import do `dist`.
+- **Runtime quebrado no entry do `@nodemelivre/core`:** re-exportava os `test-utils` (que importam `vitest`), carregando o vitest em produção. Removido do entry; seguem no subpath `@nodemelivre/core/test-utils`.
+- **Dependências não declaradas:** `@nodemelivre/core`, `@nodemelivre/images` e `@nodemelivre/messages` importavam `@nodemelivre/errors` sem declará-lo. Declaradas (consumidores de packages individuais quebravam em runtime).
+
+### Alterado
+
+- `DeduplicatingLogger`: limpeza periódica do cache de deduplicação — remove entradas expiradas emitindo o resumo dos logs suprimidos na expiração, e aplica um limite máximo de entradas (`maxEntries`, padrão 10.000) para que mensagens únicas (ex.: `requestId` diferentes) não cresçam a memória sem limite. Novo `stop()` para interromper o timer.
+- `paginate()` e resources paginados: `paginationOptions` e `sleepWithAbort` centralizados em `@nodemelivre/core` e reutilizados por items/orders/questions — fim da duplicação (3 cópias de `paginationOptions`, 2 de `sleep`).
+- **Validação mais estrita (fail fast no cliente):** `Orders.search/list` agora rejeitam `limit` não positivo/inteiro, `offset` negativo e `status` fora da union antes de chamar a API; `Messages.send` rejeita `text` não-string (antes, `undefined > 350` deixava passar); `Items` rejeita `attributes`/`pictures` fora do shape — payloads que iriam falhar na API agora falham com `InputValidationError` tipado.
+- `RateLimiter`: tracking por recurso (`método:recurso`) em vez de path literal, e parsing robusto de `X-Rate-Limit-Reset` (epoch ms/segundos ou janela restante em segundos relativos).
+
+### Removido (breaking)
+
+- `HttpClientOptions.securityHeaders` e `SECURITY_HEADERS`: headers de resposta (CSP, `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`) nunca devem ser enviados como headers de requisição — a opção que permitia isso foi removida por completo (o README documenta a recomendação de usar Helmet no seu servidor).
+- `getGlobalOAuthStateStore`/`resetGlobalOAuthStateStore`: o singleton global de `OAuthStateStore` foi removido — instancie e injete seu próprio store (`new OAuthStateStore(...)` via `createMercadoLivre`/`OAuthClient`), habilitando multi-tenancy e opções por instância.
+
+### Adicionado
+
+- **PKCE (RFC 7636) no fluxo OAuth2** (`OAuthOptions.pkce` / `MercadoLivreOptions.pkce`): `authorizationUrl` inclui `code_challenge` + `code_challenge_method` (S256 padrão, `plain` opcional) e a troca do code envia `code_verifier` — exigência do Mercado Livre para apps com o fluxo PKCE habilitado (sem ele, o `/oauth/token` responde `invalid_request`). O `code_verifier` é gerado e armazenado por `state` (recuperado ao informar o mesmo `state` em `authenticate(redirectUri, code, state)`), com `codeVerifier` explícito como alternativa. `generateCodeVerifier`/`generateCodeChallenge` exportados.
+- `OAuthClient`: `OAuthError` agora expõe o `message` do ML quando `error_description` não vem (ex.: `invalid_request` com detalhe "the following parameters are required...").
+- `OAuthStateStore` integrado ao `OAuthClient`: com `stateStore` configurado, `authorizationUrl` gera/armazena o `state` automaticamente (CSRF) e `consumeState` valida o state recebido no callback. Exposto no facade via `ml.consumeState()` e opção `stateStore` em `MercadoLivreOptions`.
+- `OAuthClient`: valida `clientId`/`clientSecret` no construtor — uso direto sem credenciais lança `ConfigurationError` com mensagem clara (antes gerava URL quebrada ou erro vindo da API).
+- `InputValidationError` em `@nodemelivre/errors` (validação de entrada no cliente, antes de enviar à API).
+- Validações: `Messages.send` rejeita texto acima de 350 caracteres; `Images.upload` rejeita arquivo vazio.
+- `Orders.waitUntilPaid` aceita `AbortSignal` para cancelamento antecipado do polling.
+- Testes para `resilience` (`parallel`/`ResilientTransport`), `OAuthStateStore` e `DeduplicatingLogger` — 147 testes no total.
+- `utils.test.ts` no `@nodemelivre/core` (regressão do crash de `null`, comportamento documentado de preservar `null`, tokens OAuth) — 171 testes no total.
+- **Validação de entrada em `@nodemelivre/items`** (`create`/`update`/`createAndPublish`): falha rápida com `InputValidationError` para `title` vazio, `price` não positivo e `available_quantity` não inteiro — mesmo padrão de `messages`/`images` (auditoria de consistência). `create`/`update` agora são `async` (validação rejeita como promise). — 175 testes no total.
+- `BuyingMode` (`'buy_it_now' | 'classified'`) em `@nodemelivre/types`; `ItemInput.buying_mode` e `Item.buying_mode` tipados.
+- `tsconfig.examples.json` + scripts `typecheck:examples`/`typecheck:all`: exemplos verificados no CI (antes ficavam fora e driftavam).
+
+## [1.0.0] - 2026-08-05
+
+### Adicionado
+
+- **SDK consolidado** — `createMercadoLivre` facade expõe 12 resources: `items`, `orders`, `users`, `shipments`, `questions`, `images`, `messages`, `webhooks`, `auth`, `http`, `core`, `types`, `errors`.
+- **Webhooks** (`@nodemelivre/webhooks`) — `parse(payload)` + `verify(payload, applicationId)` autentica via `application_id` (ML não usa HMAC).
+- **Messages** (`@nodemelivre/messages`) — chat pós-venda: `list`, `get`, `send` com `tag=post_sale`.
+- **Operações nível 3**:
+  - `Items.createAndPublish(input)` — cria e garante publicado.
+  - `Questions.reply(questionId, text)` — responde + marca respondida.
+  - `Shipments.printLabel(ids, { format })` — etiqueta PDF/ZPL como `ArrayBuffer`.
+  - `responseType: 'json' | 'text' | 'arraybuffer'` no transport/HttpClient.
+- **Images** — `UploadSource = Blob | Buffer | Uint8Array | ArrayBuffer` extensível, nome padrão `image.bin`.
+- **Paginação** — `paginate()` no core + `Items.list()` (`for await`).
+- **ADRs 0001–0012**, 12 exemplos, roadmap, CHANGELOG.
+- 110 testes (Vitest), CI verde.
+
+## [0.4.2] - 2026-08-05
+
+### Alterado
+
+- `Images.upload` agora aceita `UploadSource = Blob | Buffer | Uint8Array | ArrayBuffer` — alias em `@nodemelivre/types` para permitir novos formatos (ex.: `File`, `ReadableStream`) sem quebrar a API pública.
+- Nome padrão do arquivo no multipart alterado de `imagem` para `image.bin` (com extensão, para melhor interoperabilidade com servidores de upload).
+- ADR-0009 atualizado com a evolução do tipo de entrada.
+
+## [0.4.1] - 2026-08-05
+
+### Adicionado
+
+- `Items.createAndPublish(input)` — cria um anúncio e, se ele não nascer `active`, publica via `updateStatus('active')`. Mantém `publish(itemId)` como alias simples (sem overload ambíguo).
+- `Questions.reply(questionId, text)` — alias ergonômico de `answer`; responder via `POST /answers` já marca a pergunta como `ANSWERED`.
+- `Shipments.printLabel(ids | ids[], { format?: 'pdf' | 'zpl2' })` — baixa a etiqueta de envio (`GET /shipment_labels`) e retorna `Promise<ArrayBuffer>` (binário íntegro). Formato padrão `pdf`.
+- `responseType: 'json' | 'text' | 'arraybuffer'` em `ResourceRequest` (`@nodemelivre/core`) e `HttpClientRequest` (`@nodemelivre/http`) — suporte a respostas binárias/plano no transport.
+- ADR-0012 (operações nível 3) e exemplo `examples/nivel-3-completo.ts`.
+- Prioridade B do roadmap concluída (operações nível 3 completas) — v1.0 desbloqueada.
+- 107 testes (Vitest) — 7 novos (createAndPublish, reply, printLabel, arraybuffer/text no client).
+
+## [0.4.0] - 2026-08-05
+
+### Adicionado
+
+- **`@nodemelivre/webhooks`** — notificações do Mercado Livre:
+  - `Webhooks.parse(payload)` — converte o corpo do callback em `WebhookNotification` tipado, validando `resource`/`user_id`/`topic` e o tópico conhecido.
+  - `Webhooks.verify(payload, applicationId)` — autentica a notificação conferindo o `application_id` da sua aplicação (o ML **não** usa assinatura HMAC, ao contrário do Mercado Pago). Lança `WebhookError`.
+  - `WebhookError` em `@nodemelivre/errors`.
+- **`@nodemelivre/messages`** — chat pós-venda (`tag=post_sale`):
+  - `Messages.list(packId, sellerId, { markAsRead? })` → `GET /messages/packs/{packId}/sellers/{sellerId}`.
+  - `Messages.get(messageId)` → `GET /messages/{messageId}` (o `resource` do webhook de mensagem é um hash usado aqui).
+  - `Messages.send({ from, to, text })` → `POST /messages` (máx. 350 caracteres).
+- Tipos de domínio: `WebhookNotification`/`WebhookTopic`/`WebhookMessageAction` e `Message`/`MessageSendInput`/`MessageUser`/`MessageRecipient`/`MessageAttachment`.
+- ADR-0011 (webhooks e messages).
+- Exemplo `examples/webhooks-e-messages.ts`.
+- 100 testes (Vitest) — 14 novos (webhooks parse/verify, messages list/get/send).
+
+## [0.3.0] - 2026-08-05
+
+### Adicionado
+
+- **Paginação assíncrona** — helper `paginate()` em `@nodemelivre/core`: async generator genérico que itera item a item sobre uma busca paginada, avançando o `offset` automaticamente e suportando `break` para parada antecipada.
+- `Items.list(siteId, params)` — percorre todos os resultados de uma busca:
+  ```ts
+  for await (const item of ml.items.list('MLB', { q: 'fone' })) {
+    console.log(item.title)
+  }
+  ```
+- Operações nível 3:
+  - `Items.publish(itemId)` / `Items.pause(itemId)` — aliases tipados de `updateStatus`.
+  - `Orders.waitUntilPaid(orderId, { timeoutMs?, intervalMs? })` — polling até o pedido ficar `paid`, com `PollingTimeoutError` em `@nodemelivre/errors` no estouro de timeout.
+- ADR-0010 (paginação assíncrona e operações nível 3).
+- 86 testes (Vitest) — 9 novos (paginate no core, `list`, `publish`, `pause`, `waitUntilPaid`).
+
+## [0.2.0] - 2026-08-05
+
+### Adicionado
+
+- `@nodemelivre/images` — novo resource `Images.upload(file)` que envia imagem via multipart para `POST /pictures/items/upload` e retorna `ImageUploadResponse` (id + variações de tamanho no CDN). O `id` pode ser usado em `picture_ids` ao criar itens com variações.
+- Suporte a `FormData`/`Blob`/`BodyInit` no `HttpClient`: body nativo multipart é passado direto ao fetch (sem `JSON.stringify`), preservando o boundary gerado pelo `FormData`.
+- Tipos de variação em `@nodemelivre/types` — `VariationAttribute`, `ItemVariation`, `ItemVariationInput`; `Item.variations` e `ItemInput.variations`.
+- ADR-0009 (resource images e variações de item).
+- 77 testes (Vitest) — 3 novos (upload multipart no resource, FormData direto no client).
+
 ## [0.1.0] - 2026-08-04
 
 ### Adicionado

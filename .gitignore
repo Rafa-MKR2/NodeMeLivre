@@ -10,3 +10,8 @@ coverage/
 .DS_Store
 
 .nodemelivre/
+
+# Build artifacts in package src directories
+packages/*/src/*.js
+packages/*/src/*.js.map
+packages/*/src/*.d.ts

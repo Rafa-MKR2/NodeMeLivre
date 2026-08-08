@@ -34,6 +34,8 @@ export type ShipmentType = 'custom' | 'me1' | 'me2' | 'me3'
 
 export interface Order {
   id: number
+  /** Agrupamento da compra (pack) — o chat pós-venda é por pack_id, não por id. */
+  pack_id?: number
   status: OrderStatus
   status_detail?: string
   date_created: string

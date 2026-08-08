@@ -1,9 +1,12 @@
-import { ApiError, OAuthError } from '@nodemelivre/errors'
+import { ApiError, ConfigurationError, OAuthError } from '@nodemelivre/errors'
 import { HttpClient, type HttpClientOptions } from '@nodemelivre/http'
+import { generateCodeChallenge, generateCodeVerifier, type PkceMethod } from './pkce.js'
+import type { OAuthStateEntry, OAuthStateStore } from './state.js'
 import type { AccessToken } from './token.js'
 
 const TOKEN_PATH = '/oauth/token'
 const DEFAULT_SITE_ID = 'MLB'
+const PKCE_TTL_MS = 10 * 60 * 1000 // mesma janela dos states (fallback in-memory)
 
 /** Domínios de autorização por site. Brasil usa mercadolivre, os demais mercadolibre. */
 const AUTH_DOMAINS: Record<string, string> = {
@@ -37,16 +40,41 @@ export interface OAuthOptions {
   fetchImpl?: typeof fetch
   /** Client HTTP usado apenas nas chamadas de token (sem Authorization). */
   httpClient?: HttpClient
+  /**
+   * Store de estados OAuth para proteção CSRF. Quando configurado,
+   * `authorizationUrl` gera/armazena o `state` automaticamente e
+   * `consumeState` valida o state recebido no callback.
+   * Também armazena o `code_verifier` PKCE no metadata do state.
+   */
+  stateStore?: OAuthStateStore
+  /**
+   * Habilita PKCE (RFC 7636) no fluxo `authorization_code`.
+   *
+   * A partir de 2025/2026 o Mercado Livre exige `code_verifier` para
+   * aplicações com o fluxo PKCE habilitado — sem ele a troca do code falha
+   * com `invalid_request`. Padrão: desabilitado (compatível com apps antigos).
+   */
+  pkce?: boolean | { method?: PkceMethod }
 }
 
 export interface AuthorizationUrlOptions {
   redirectUri: string
-  /** Valor anti-CSRF que volta intacto no redirect. */
+  /** Valor anti-CSRF que volta intacto no redirect. Padrão: gerado e armazenado no `stateStore`. */
   state?: string
+  /** Dados extras associados ao state (ex.: página para redirecionar após o login). */
+  metadata?: Record<string, unknown>
 }
 
 export interface TokenGrantOptions {
   redirectUri?: string
+  /**
+   * State usado na autorização — necessário para o SDK recuperar o
+   * `code_verifier` gerado (PKCE). Pode ser omitido quando `codeVerifier`
+   * é passado explicitamente ou quando o fluxo PKCE está desabilitado.
+   */
+  state?: string
+  /** Code verifier explícito (quando o chamador gerencia o próprio PKCE). */
+  codeVerifier?: string
 }
 
 /** Resposta crua do endpoint /oauth/token. */
@@ -72,12 +100,27 @@ export class OAuthClient {
   private readonly clientSecret: string
   private readonly siteId: string
   private readonly httpClient: HttpClient
+  private readonly pkceEnabled: boolean
+  private readonly pkceMethod: PkceMethod
+  readonly stateStore: OAuthStateStore | undefined
+  /** Fallback in-memory para code_verifier quando não há stateStore (compatibilidade). */
+  private readonly codeVerifiers = new Map<string, { verifier: string; createdAt: number }>()
 
   constructor(options: OAuthOptions) {
+    if (!options.clientId || !options.clientSecret) {
+      throw new ConfigurationError(
+        'OAuth não configurado. Defina clientId e clientSecret (ML_CLIENT_ID e ML_CLIENT_SECRET).',
+      )
+    }
     this.clientId = options.clientId
     this.clientSecret = options.clientSecret
     this.siteId = options.siteId ?? DEFAULT_SITE_ID
     this.httpClient = options.httpClient ?? buildTokenClient(options)
+    this.stateStore = options.stateStore
+    const pkce = options.pkce ?? false
+    this.pkceEnabled = pkce === true || (typeof pkce === 'object' && pkce !== null)
+    this.pkceMethod =
+      typeof pkce === 'object' && pkce !== null && pkce.method !== undefined ? pkce.method : 'S256'
   }
 
   /** URL para redirecionar o vendedor ao navegador de autorização do Mercado Livre. */
@@ -86,20 +129,87 @@ export class OAuthClient {
     url.searchParams.set('response_type', 'code')
     url.searchParams.set('client_id', this.clientId)
     url.searchParams.set('redirect_uri', options.redirectUri)
-    if (options.state !== undefined) {
-      url.searchParams.set('state', options.state)
+
+    const state = this.resolveState(options)
+    if (state !== undefined) {
+      url.searchParams.set('state', state)
+    }
+
+    if (this.pkceEnabled) {
+      const verifier = generateCodeVerifier()
+      url.searchParams.set('code_challenge', generateCodeChallenge(verifier, this.pkceMethod))
+      url.searchParams.set('code_challenge_method', this.pkceMethod)
+      if (state !== undefined) {
+        if (this.stateStore !== undefined) {
+          // Armazena o code_verifier no metadata do state para que possa ser
+          // recuperado no callback mesmo em outra instância (multi-processo)
+          this.stateStore.updateMetadata(state, { codeVerifier: verifier })
+        } else {
+          // Fallback in-memory para compatibilidade (single-processo)
+          this.codeVerifiers.set(state, { verifier, createdAt: Date.now() })
+        }
+      }
     }
     return url.toString()
   }
 
+  /**
+   * Valida e consome um `state` recebido no callback OAuth (proteção CSRF).
+   * Retorna os dados armazenados (redirectUri/metadata) se válido, ou `null`
+   * se não houver `stateStore` configurado, o state for inexistente/expirado
+   * ou já tiver sido consumido.
+   */
+  consumeState(state: string): OAuthStateEntry | null {
+    return this.stateStore?.consume(state) ?? null
+  }
+
+  /** Recupera o code_verifier PKCE do metadata do state (stateStore ou fallback in-memory). */
+  getCodeVerifierFromState(state: string): string | undefined {
+    // Primeiro tenta no stateStore (multi-processo)
+    if (this.stateStore !== undefined) {
+      const entry = this.stateStore.get(state)
+      if (entry?.metadata?.codeVerifier) {
+        return entry.metadata.codeVerifier as string
+      }
+    }
+    // Fallback in-memory (compatibilidade single-processo)
+    const stored = this.codeVerifiers.get(state)
+    if (stored === undefined) return undefined
+    if (Date.now() - stored.createdAt > PKCE_TTL_MS) {
+      this.codeVerifiers.delete(state)
+      return undefined
+    }
+    return stored.verifier
+  }
+
+  /** @deprecated Use getCodeVerifierFromState. Mantido para compatibilidade. */
+  getCodeVerifier(state: string): string | undefined {
+    return this.getCodeVerifierFromState(state)
+  }
+
+  private resolveState(options: AuthorizationUrlOptions): string | undefined {
+    if (this.stateStore === undefined) return options.state
+    if (options.state !== undefined) {
+      this.stateStore.register(options.state, options.redirectUri, options.metadata)
+      return options.state
+    }
+    return this.stateStore.create(options.redirectUri, options.metadata)
+  }
+
   /** Troca o código de autorização por um AccessToken. */
   async exchangeCode(code: string, options: TokenGrantOptions): Promise<AccessToken> {
-    const body = {
+    const body: Record<string, string | undefined> = {
       grant_type: 'authorization_code',
       client_id: this.clientId,
       client_secret: this.clientSecret,
       code,
       redirect_uri: options.redirectUri,
+    }
+    if (this.pkceEnabled) {
+      const verifier =
+        options.codeVerifier ??
+        (options.state !== undefined ? this.getCodeVerifierFromState(options.state) : undefined)
+      if (verifier !== undefined) body.code_verifier = verifier
     }
     return this.tokenRequest(body)
   }
@@ -139,7 +249,7 @@ export class OAuthClient {
       return toAccessToken(response)
     } catch (error) {
       if (error instanceof ApiError && isOAuthErrorBody(error.body)) {
-        throw new OAuthError(error.body.error, error.body.error_description)
+        throw new OAuthError(error.body.error, error.body.error_description ?? error.body.message)
       }
       throw error
     }
@@ -172,7 +282,9 @@ function toAccessToken(response: OAuthTokenResponse): AccessToken {
   return token
 }
 
-function isOAuthErrorBody(body: unknown): body is { error: string; error_description?: string } {
+function isOAuthErrorBody(
+  body: unknown,
+): body is { error: string; error_description?: string; message?: string } {
   if (typeof body !== 'object' || body === null) return false
   const record = body as Record<string, unknown>
   return typeof record.error === 'string'

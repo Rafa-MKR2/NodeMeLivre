@@ -7,46 +7,49 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | Versão | Escopo | Objetivo | Status |
 |---|---|---|---|
 | **v0.1.0** | Base estável (monorepo, HTTP, OAuth2, TokenStore, 5 resources) | Publicar núcleo sólido; feedback inicial | ✔ Publicado 2026-08-04 |
-| **v0.2.x** | Paginação assíncrona, eventos, operações nível 3 | Ergonomia: `for await`, `ml.on(...)`, `ml.items.publish()` |
-| **v0.3.x** | Upload de imagens, webhooks `verify/parse`, PKCE | Recursos de plataforma |
-| **v0.4.x** | Resources extras: payments, messages, billing | Cobertura de API |
-| **v1.0.0** | API pública consolidada, estabilidade garantida | Marco de produção |
+| **v0.2.x** | Upload de imagens + variações em itens | Destravar a criação real de anúncios (foto + SKU) | ✔ Concluído |
+| **v0.3.x** | Paginação assíncrona + operações nível 3 | Ergonomia: `for await`, `publish`, `pause`, `waitUntilPaid` | ✔ Concluído |
+| **v0.4.x** | Webhooks (`parse`/`verify`) + `messages` | Notificação em tempo real e chat de comprador | ✔ Concluído |
+| **v1.0.0** | API pública consolidada, docs completas, estabilidade | Marco de produção | ✔ Concluído 2026-08-05 |
 
-> Não esperamos 100% da API do ML para publicar. Entregamos valor incremental.
+> **Critério de "versão sólida" (v1.0):** o integrador consegue, de ponta a ponta, autenticar, criar anúncio com foto e variação, paginar buscas, acompanhar vendas/perguntas/envios em tempo real e operar por chat — sem workaround manual.
+
+> Itens adiados para pós-v1.0 (não bloqueiam produção): middleware/plugins, cache, métricas, `payments`/`billing`. **PKCE** foi antecipado: virou exigência do Mercado Livre para apps novos (troca do code sem `code_verifier` → `invalid_request`) e já está implementado na v1.0.x.
 
 ---
 
-## Prioridade A — Fundação (aumenta capacidade do SDK)
+## Prioridade A — Destrava o vendedor (v0.2 → v0.3)
 
 | Feature | Dificuldade | Tempo | Status |
 |---|---|---|---|
+| **Upload de imagens** (`ml.images.upload(file)`) | Média | 2 dias | ✔ Concluído |
+| **Variações em itens** (`ItemInput.variations`, SKU/tamanho/cor) | Média | 2 dias | ✔ Concluído |
+| **Paginação assíncrona** (`for await (const item of ml.items.list(params))`) | Média | 2 dias | ✔ Concluído |
 | **Eventos** (`ml.on('request' \| 'response' \| 'retry' \| 'tokenRefreshed' \| 'rateLimit' \| 'error')`) | Média | 2 dias | ✔ Concluído |
-| **Paginação assíncrona** (`for await (const item of ml.items.list(params))`) | Média | 2 dias | ⏳ Planejado |
-| **Upload de imagens** (`ml.images.upload(file)`) | Média | 2 dias | ⏳ Planejado |
-| **Webhooks** (`ml.webhooks.verify(payload, signature)`, `ml.webhooks.parse(payload)`) | Média | 3 dias | ⏳ Planejado |
-| **PKCE** no fluxo OAuth2 | Média | 2 dias | ⏳ Planejado |
 | **MockTransport** para testes (testar sem chamar ML) | Baixa | 1 dia | ✔ Concluído |
 
-> **Observabilidade** é o diferencial: quando alguém abrir issue "o refresh não funcionou", eventos valem ouro para depuração.
+> **Sem upload de imagem e variação, o SDK só cria anúncio "quebrado".** Esses dois destravam a operação real.
 
 ---
 
-## Prioridade B — Ergonomia (desenvolvedor ama o SDK)
+## Prioridade B — Produção (v0.4)
 
 | Feature | Dificuldade | Tempo | Status |
 |---|---|---|---|
-| **Operações nível 3** — compostas que economizam horas | Média | 3 dias | ⏳ Planejado |
-| `ml.items.publish(input)` → cria + ativa + publica | | | |
-| `ml.items.pause(id)` → pausa anúncio | | | |
-| `ml.orders.waitUntilPaid(orderId, timeout?)` → polling com backoff | | | |
-| `ml.questions.reply(questionId, text)` → responde + marca lida | | | |
-| `ml.shipments.printLabel(shipmentId)` → gera + baixa label | | | |
+| **Operações nível 3** — compostas que economizam horas | Média | 3 dias | ✔ Concluído |
+| `ml.items.createAndPublish(input)` → cria + publica | | | ✔ Concluído |
+| `ml.items.pause(id)` → pausa anúncio | | | ✔ Concluído |
+| `ml.orders.waitUntilPaid(orderId, timeout?)` → polling com backoff | | | ✔ Concluído |
+| `ml.questions.reply(questionId, text)` → responde + marca lida | | | ✔ Concluído |
+| `ml.shipments.printLabel(shipmentId)` → gera + baixa label (PDF/ZPL) | | | ✔ Concluído |
+| **Webhooks** (`ml.webhooks.parse(payload)`, `ml.webhooks.verify(payload, applicationId)`) | Média | 3 dias | ✔ Concluído |
+| **Messages** (`ml.messages.list/get/send` — chat de comprador) | Média | 3 dias | ✔ Concluído |
 
-> Substitui sequências manuais por uma chamada única, tipada e testada.
+> **Webhooks** habilitam notificação em tempo real (nova venda, pergunta, mensagem) — essencial para rodar em produção.
 
 ---
 
-## Prioridade C — Ecossistema (transforma SDK em plataforma)
+## Prioridade C — Pós-v1.0 (ecossistema)
 
 | Feature | Dificuldade | Tempo | Status |
 |---|---|---|---|
@@ -54,6 +57,8 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | **Cache** (ETag, `If-None-Match`, in-memory + pluggável) | Média | 2 dias | ⏳ Planejado |
 | **Métricas** (latência, taxa de erro, rate-limit remaining) | Média | 2 dias | ⏳ Planejado |
 | **Mocks avançados** (fixtures, scenarios, MSW integration) | Média | 2 dias | ⏳ Planejado |
+| **PKCE** no fluxo OAuth2 (`OAuthOptions.pkce`, RFC 7636) | Média | 2 dias | ✔ Concluído |
+| **Resources extras** (payments, billing) | Baixa | 5 dias | ⏳ Planejado |
 
 ---
 
@@ -71,6 +76,52 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | CI (Biome + typecheck + test + build + conventional commits) | ✔ |
 | Arquitetura modular 11 pacotes (errors, http, core, types, auth, 5 resources, sdk) | ✔ |
 | Disciplina de tipos: unions para enums fechados | ✔ |
+
+## Concluído (v0.2)
+
+| Feature | Status |
+|---|---|
+| `@nodemelivre/images` — resource `Images.upload()` (multipart) | ✔ |
+| Suporte a `FormData`/multipart no `HttpClient` | ✔ |
+| Variações em itens (`ItemVariation`, `ItemVariationInput`) | ✔ |
+| ADR-0009 (images + variações) | ✔ |
+
+## Concluído (v0.3)
+
+| Feature | Status |
+|---|---|
+| `paginate()` no core + `Items.list()` (`for await`) | ✔ |
+| `Items.publish` / `Items.pause` (aliases de status) | ✔ |
+| `Orders.waitUntilPaid()` + `PollingTimeoutError` | ✔ |
+| ADR-0010 (paginação + nível 3) | ✔ |
+
+## Concluído (v0.4)
+
+| Feature | Status |
+|---|---|
+| `@nodemelivre/webhooks` — `Webhooks.parse()` / `Webhooks.verify(payload, applicationId)` (sem HMAC — o ML não assina) | ✔ |
+| `@nodemelivre/messages` — `Messages.list/get/send` (chat pós-venda, `tag=post_sale`) | ✔ |
+| `WebhookError` em `@nodemelivre/errors` | ✔ |
+| ADR-0011 (webhooks + messages) | ✔ |
+
+## Concluído (v0.4.1 — nível 3 completo)
+
+| Feature | Status |
+|---|---|
+| `Items.createAndPublish(input)` — cria + publica anúncio | ✔ |
+| `Questions.reply(questionId, text)` — responde + marca respondida | ✔ |
+| `Shipments.printLabel(ids, { format: 'pdf' \| 'zpl2' })` → `ArrayBuffer` | ✔ |
+| `responseType` (`json`/`text`/`arraybuffer`) no transport/HttpClient | ✔ |
+| ADR-0012 (operações nível 3) | ✔ |
+
+## Concluído (v1.0)
+
+| Feature | Status |
+|---|---|
+| API pública consolidada (SDK facade com todos os 12 resources) | ✔ |
+| Docs completas (ADRs 0001–0012, exemplos, roadmap, CHANGELOG) | ✔ |
+| 171 testes (Vitest) passando | ✔ |
+| CI verde (lint, typecheck, teste, build) | ✔ |
 
 ---
 

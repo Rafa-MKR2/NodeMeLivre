@@ -1,0 +1,35 @@
+{
+  "name": "@nodemelivre/webhooks",
+  "version": "1.0.0-beta.1",
+  "description": "Recursos de webhooks (notifica\u00e7\u00f5es) do NodeMeLivre para a API do Mercado Livre",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@nodemelivre/errors": "*",
+    "@nodemelivre/types": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  }
+}

@@ -1,0 +1,63 @@
+# ADR-0009: Resource images (upload) e variações de item
+
+- **Status:** Aceita
+- **Data:** 2026-08-05
+- **Autor:** Rafael
+
+## Contexto
+
+O v0.1 só cria anúncios "quebrados": `ItemInput.pictures` aceita apenas URLs externas (`{ source }`), sem upload para o CDN do Mercado Livre, e não há suporte a variações (SKU, cor/tamanho). Para destravar a operação real do vendedor (v0.2), precisamos: (1) enviar imagem para `POST /pictures/items/upload` e usar o `id` retornado no anúncio; (2) modelar `variations` no payload do item.
+
+## Problema
+
+Como adicionar upload de arquivos e variações sem quebrar a arquitetura modular (ADR-0005) e a disciplina de tipos (ADR-0007)?
+
+## Solução
+
+### Resource `@nodemelivre/images`
+
+Novo pacote por domínio seguindo ADR-0004/0005, com `Images.upload(file: UploadSource)` que monta um `FormData` e posta em `/pictures/items/upload` via multipart. Retorna `ImageUploadResponse` (id + variações de tamanho no CDN).
+
+O tipo de entrada é um **alias** em `@nodemelivre/types`:
+
+```ts
+type UploadSource = Blob | Buffer | Uint8Array | ArrayBuffer
+```
+
+Um alias dedicado permite estender os formatos suportados (ex.: `File`, `ReadableStream`, `fs.ReadStream`) sem quebrar a API pública — basta ampliar a união. O nome padrão do arquivo é `image.bin` (com extensão, para melhor interoperabilidade com servidores de upload).
+
+### Suporte a multipart no `HttpClient`
+
+O `HttpClient` serializava todo body como JSON. Foi adicionada detecção de `BodyInit` (string, `Blob`, `FormData`, `URLSearchParams`, `ArrayBuffer`, `ArrayBufferView`): quando o body é um desses, é passado direto ao fetch sem `JSON.stringify` e sem forçar `content-type` (o `FormData` define o boundary automaticamente).
+
+### Variações em itens
+
+Novos tipos em `@nodemelivre/types`:
+- `VariationAttribute` — combinação nome/valor (ex.: `{ name: 'Color', value_name: 'Red' }`).
+- `ItemVariation` — variação existente (com `id`, preço, quantidade, `picture_ids`).
+- `ItemVariationInput` — payload de criação/atualização.
+- `Item.variations?: ItemVariation[]` e `ItemInput.variations?: ItemVariationInput[]`.
+
+O `Items.create`/`update` já repassam o body integral, então as variações fluem sem mudar o resource `Items`.
+
+- **Alternativa A:** upload via `Buffer` cru com header `content-type` manual — frágil, sem boundary, quebrado no undici.
+- **Alternativa B:** dependência externa de multipart (`form-data`) — peso extra sem necessidade; `FormData` é global no Node 18+.
+- **Escolhida:** `FormData` nativo + detecção de `BodyInit` no `HttpClient`, porque reusa o transport único (auth/retry/rate-limit) e o fetch nativo (ADR-0002).
+
+## Consequências
+
+- (+) Vendedor cria anúncio com foto: `ml.images.upload(file)` → usa `id` em `pictures`/`picture_ids`.
+- (+) Variações de SKU/cor/tamanho fluem pelo `Items.create/update` sem mudança no resource.
+- (+) Novo pacote `@nodemelivre/images` isolado, publicado de forma independente (ADR-0005).
+- (-) `FormData` exige Node 18.17+ (já é o engine mínimo do monorepo) — sem problema.
+- (-) Upload só cobre o endpoint `items/upload` (imagem para anúncio); outros endpoints de imagem (múltiplos por request, edição) ficam para evolução posterior.
+
+#### `Images.uploadFromUrl(url)` — upload por URL pública (v1.0.x)
+
+No hardening da v1.0.x, o resource ganhou `uploadFromUrl(url)`:
+
+- Faz `POST /pictures` com `{ source: url }` — registra no CDN do ML uma imagem já hospedada em URL pública (o endpoint `items/upload` exige multipart de arquivo).
+- **Valida o protocolo `http(s)`** do argumento e lança `InputValidationError` para qualquer outro esquema (`file:`, `data:`, `ftp:`...) — evita payloads sem sentido indo à API e, no painel, mapeia para 400 antes de qualquer chamada.
+- Retorna o mesmo `ImageUploadResponse` (`id` + `variations`) do `upload`, então o fluxo do anúncio é idêntico: `pictures: [{ source: foto.id }]` ou `picture_ids`.
+
+**Motivação:** o painel usava o Nível 1 do SDK (`ml.http.post('/pictures', ...)`) para esse caso; expor no resource dá tipagem, validação e reuso do transporte único (auth/retry/rate-limit) sem sair da API pública.

@@ -1,5 +1,6 @@
 import { fakeTransport } from '@nodemelivre/core/test-utils'
-import { describe, expect, it } from 'vitest'
+import { PollingTimeoutError } from '@nodemelivre/errors'
+import { describe, expect, it, vi } from 'vitest'
 import { Orders } from './orders.js'
 
 const order = { id: 123, total_amount: 50, order_items: [] }
@@ -28,5 +29,147 @@ describe('Orders', () => {
     const transport = fakeTransport(() => [])
     await new Orders(transport).items(123)
     expect(transport.calls[0]).toMatchObject({ path: '/orders/123/items' })
+  })
+
+  it('deve retornar a venda já paga sem aguardar', async () => {
+    const transport = fakeTransport(() => ({ ...order, status: 'paid' }))
+    const paid = await new Orders(transport).waitUntilPaid(123, { timeoutMs: 100, intervalMs: 10 })
+    expect(paid.status).toBe('paid')
+    expect(transport.calls).toHaveLength(1)
+  })
+
+  it('deve aguardar até o pedido ser pago', async () => {
+    const statuses = ['payment_required', 'payment_required', 'paid']
+    const transport = fakeTransport(() => {
+      const status = statuses.shift() ?? 'paid'
+      return { ...order, status }
+    })
+
+    const paid = await new Orders(transport).waitUntilPaid(123, {
+      timeoutMs: 1_000,
+      intervalMs: 10,
+    })
+    expect(paid.status).toBe('paid')
+    expect(transport.calls).toHaveLength(3)
+  })
+
+  it('deve lançar PollingTimeoutError quando o pedido não pagar a tempo', async () => {
+    vi.useFakeTimers()
+    try {
+      const transport = fakeTransport(() => ({ ...order, status: 'payment_required' }))
+      const orders = new Orders(transport)
+
+      const promise = orders.waitUntilPaid(123, { timeoutMs: 100, intervalMs: 50 }).then(
+        () => undefined,
+        (e) => e,
+      )
+      await vi.advanceTimersByTimeAsync(250)
+
+      await expect(promise).resolves.toBeInstanceOf(PollingTimeoutError)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('deve abortar o polling quando o signal é cancelado', async () => {
+    vi.useFakeTimers()
+    try {
+      const transport = fakeTransport(() => ({ ...order, status: 'payment_required' }))
+      const controller = new AbortController()
+      const orders = new Orders(transport)
+
+      const promise = orders
+        .waitUntilPaid(123, { timeoutMs: 10_000, intervalMs: 50, signal: controller.signal })
+        .then(
+          () => undefined,
+          (e) => e,
+        )
+
+      controller.abort()
+      await vi.advanceTimersByTimeAsync(100)
+
+      const err = await promise
+      expect(err).toBeInstanceOf(Error)
+      expect((err as Error).name).toBe('AbortError')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('deve iterar todas as vendas de uma busca paginada', async () => {
+    const pages = [
+      { results: [{ ...order, id: 1 }], paging: { total: 3, offset: 0, limit: 2 } },
+      {
+        results: [
+          { ...order, id: 2 },
+          { ...order, id: 3 },
+        ],
+        paging: { total: 3, offset: 2, limit: 2 },
+      },
+    ]
+    const transport = fakeTransport(
+      () => pages.shift() ?? { results: [], paging: { total: 3, offset: 2, limit: 2 } },
+    )
+
+    const ids: number[] = []
+    for await (const item of new Orders(transport).list({ seller: 42 }, undefined)) {
+      ids.push(item.id)
+    }
+
+    expect(ids).toEqual([1, 2, 3])
+    expect(transport.calls).toHaveLength(2)
+    expect(transport.calls[0]?.query).toMatchObject({ seller: 42, offset: 0, limit: 50 })
+    expect(transport.calls[1]?.query).toMatchObject({ seller: 42, offset: 1, limit: 50 })
+  })
+
+  it('deve respeitar o limit informado pelo consumidor', async () => {
+    const transport = fakeTransport(() => ({
+      results: [{ ...order, id: 1 }],
+      paging: { total: 1, offset: 0, limit: 10 },
+    }))
+
+    const ids: number[] = []
+    for await (const item of new Orders(transport).list({ limit: 10 })) {
+      ids.push(item.id)
+    }
+
+    expect(ids).toEqual([1])
+    expect(transport.calls[0]?.query).toMatchObject({ offset: 0, limit: 10 })
+  })
+
+  it('deve repassar o AbortSignal para a requisição em voo', async () => {
+    const transport = fakeTransport(() => ({
+      results: [{ ...order, id: 1 }],
+      paging: { total: 1, offset: 0, limit: 10 },
+    }))
+    const controller = new AbortController()
+
+    const items: number[] = []
+    for await (const item of new Orders(transport).list({}, controller.signal)) {
+      items.push(item.id)
+    }
+
+    expect(items).toEqual([1])
+    expect(transport.calls[0]?.signal).toBe(controller.signal)
+  })
+
+  it('deve abortar entre as páginas quando o signal dispara', async () => {
+    const transport = fakeTransport(() => ({
+      results: [{ ...order, id: 1 }],
+      paging: { total: 100, offset: 0, limit: 1 },
+    }))
+    const controller = new AbortController()
+
+    const items: number[] = []
+    const iterate = async (): Promise<void> => {
+      for await (const item of new Orders(transport).list({}, controller.signal)) {
+        items.push(item.id)
+        controller.abort()
+      }
+    }
+
+    await expect(iterate()).rejects.toThrow(/aborted/i)
+    expect(items).toEqual([1])
+    expect(transport.calls).toHaveLength(1)
   })
 })

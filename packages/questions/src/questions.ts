@@ -1,4 +1,10 @@
-import { type ResourceTransport, toQuery } from '@nodemelivre/core'
+import {
+  type PageFetcher,
+  paginate,
+  paginationOptions,
+  type ResourceTransport,
+  toQuery,
+} from '@nodemelivre/core'
 import type {
   Question,
   QuestionAnswer,
@@ -16,6 +22,42 @@ export class Questions {
     return this.transport.get('/questions/search', { query: toQuery(params) })
   }
 
+  /**
+   * Itera todas as perguntas de uma busca, página após página, pergunta a
+   * pergunta.
+   *
+   * ```ts
+   * for await (const question of ml.questions.list({ seller_id: me.id })) {
+   *   console.log(question.text)
+   * }
+   * ```
+   *
+   * Aceita um `AbortSignal` opcional: o `for await` rejeita com AbortError
+   * quando o signal dispara, sem buscar a página seguinte.
+   */
+  list(
+    params: QuestionSearchParams = {},
+    signal?: AbortSignal,
+  ): AsyncGenerator<Question, void, void> {
+    // A resposta de /questions/search usa `questions` (não `results`); o
+    // adaptador abaixo normaliza para o formato do `paginate()`.
+    const fetchPage: PageFetcher<Question> = async (offset, limit, pageSignal) => {
+      const page = await this.transport.get<QuestionSearchResponse>('/questions/search', {
+        query: toQuery({ ...params, offset, limit }),
+        ...(pageSignal !== undefined ? { signal: pageSignal } : {}),
+      })
+      return {
+        results: page.questions ?? [],
+        paging: {
+          total: page.total,
+          offset: page.paging?.offset ?? offset,
+          limit: page.paging?.limit ?? limit,
+        },
+      }
+    }
+    return paginate(fetchPage, paginationOptions(params, signal))
+  }
+
   /** Detalhes de uma pergunta. */
   get(questionId: number | string): Promise<Question> {
     return this.transport.get(`/questions/${questionId}`)
@@ -27,5 +69,10 @@ export class Questions {
       question_id: input.questionId,
       text: input.text,
     })
+  }
+
+  /** Responde uma pergunta e a marca como respondida (alias de `answer`). */
+  reply(questionId: number | string, text: string): Promise<QuestionAnswer> {
+    return this.answer({ questionId: Number(questionId), text })
   }
 }

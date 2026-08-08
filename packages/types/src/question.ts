@@ -32,6 +32,8 @@ export interface QuestionSearchParams {
   api_version?: number
   from?: string
   to?: string
+  offset?: number
+  limit?: number
 }
 
 export interface QuestionSearchResponse {

@@ -1,7 +1,7 @@
 {
   "name": "@nodemelivre/core",
-  "version": "0.1.0",
-  "description": "Núcleo do NodeMeLivre: transport, logger e test-utils",
+  "version": "1.0.0-beta.1",
+  "description": "N\u00facleo do NodeMeLivre: transport, logger e test-utils",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -25,5 +25,15 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@nodemelivre/errors": "*",
+    "@nodemelivre/types": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
   }
 }
