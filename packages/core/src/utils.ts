@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto'
+
 /**
  * Chaves perigosas em objetos vindos de `JSON.parse` de fonte não confiável.
  * `__proto__` aciona o setter de prototype ao atribuir; `constructor`/`prototype`
@@ -49,6 +51,16 @@ export function omitEmpty<T extends object>(obj: T): Partial<T> {
  * profundidade arbitrária, e a versão recursiva estoura a pilha do V8
  * (~10k frames → `RangeError`) derrubando o processo do integrador — DoS
  * local confirmado por execução (Rodada 5 da auditoria).
+ *
+ * **Ciclos também são tratados** (Rodada 9): a pilha explícita por si só não
+ * detecta objetos com referência circular (`obj.self = obj`) — sem proteção,
+ * o loop empilhava frames para sempre até **OOM do processo** (confirmado
+ * por execução). Objetos no caminho atual são rastreados em um `WeakSet`;
+ * ao reencontrar um deles (ciclo), o valor é **omitido** (mesma regra de
+ * `undefined` — um valor circular não pode ser serializado para a API de
+ * qualquer forma). DAGs legítimos (o mesmo objeto referenciado em dois
+ * ramos diferentes) continuam intactos, pois o `WeakSet` só contém o
+ * caminho atual (removido ao desempilhar).
  */
 export function deepOmitEmpty<T>(value: T): T {
   return cleanDeep(value) as T
@@ -67,26 +79,47 @@ interface CleanFrame {
   index: number
   out: unknown[] | Record<string, unknown>
   consumer: CleanConsumer | null
+  /** Objeto dono deste frame (para remover do caminho ao desempilhar). */
+  owner: object
 }
 
-/** Iterativo — semântica idêntica à recursão original (sem stack overflow). */
+/** Iterativo — semântica idêntica à recursão original (sem stack overflow nem OOM por ciclo). */
 function cleanDeep(value: unknown): unknown {
   const isContainer = (v: unknown): v is object => v !== null && typeof v === 'object'
   const stack: CleanFrame[] = []
+  // Caminho atual (objetos ainda sendo processados). Detecta ciclos sem
+  // confundir DAGs: um objeto fora do caminho (já finalizado) pode ser
+  // re-processado normalmente.
+  const inPath = new WeakSet<object>()
   let rootResult: unknown = value
 
-  const pushFrame = (node: unknown, consumer: CleanConsumer | null): void => {
+  /**
+   * Empilha um container. Retorna `false` quando o node é um CICLO (já está
+   * no caminho atual) — o chamador então omite o valor (array-item não é
+   * empurrado; object-value não é atribuído).
+   */
+  const pushFrame = (node: object, consumer: CleanConsumer | null): boolean => {
+    if (inPath.has(node)) return false
+    inPath.add(node)
     if (Array.isArray(node)) {
-      stack.push({ kind: 'array', items: node, index: 0, out: [], consumer })
+      stack.push({ kind: 'array', items: node, index: 0, out: [], consumer, owner: node })
     } else {
       stack.push({
         kind: 'object',
-        entries: Object.entries(node as object),
+        entries: Object.entries(node),
         index: 0,
         out: {},
         consumer,
+        owner: node,
       })
     }
+    return true
+  }
+
+  const popFrame = (): CleanFrame => {
+    const frame = stack.pop() as CleanFrame
+    inPath.delete(frame.owner)
+    return frame
   }
 
   const deliver = (result: unknown, consumer: CleanConsumer | null): void => {
@@ -107,7 +140,7 @@ function cleanDeep(value: unknown): unknown {
   }
 
   if (!isContainer(value)) return value
-  pushFrame(value, null)
+  if (!pushFrame(value, null)) return value
 
   while (stack.length > 0) {
     const frame = stack[stack.length - 1] as CleanFrame
@@ -115,15 +148,18 @@ function cleanDeep(value: unknown): unknown {
     if (frame.kind === 'array') {
       const items = frame.items as unknown[]
       if (frame.index >= items.length) {
-        stack.pop()
-        deliver(frame.out, frame.consumer)
-        if (stack.length === 0) rootResult = frame.out
+        const done = popFrame()
+        deliver(done.out, done.consumer)
+        if (stack.length === 0) rootResult = done.out
         continue
       }
       const item = items[frame.index]
       frame.index++
       if (isContainer(item)) {
-        pushFrame(item, { kind: 'array-item', out: frame.out })
+        // Ciclo em array: o item é omitido (não pode ser serializado).
+        if (!pushFrame(item, { kind: 'array-item', out: frame.out })) {
+          /* omitido */
+        }
       } else {
         ;(frame.out as unknown[]).push(item)
       }
@@ -132,15 +168,18 @@ function cleanDeep(value: unknown): unknown {
 
     const entries = frame.entries as [string, unknown][]
     if (frame.index >= entries.length) {
-      stack.pop()
-      deliver(frame.out, frame.consumer)
-      if (stack.length === 0) rootResult = frame.out
+      const done = popFrame()
+      deliver(done.out, done.consumer)
+      if (stack.length === 0) rootResult = done.out
       continue
     }
     const [key, val] = entries[frame.index] as [string, unknown]
     frame.index++
     if (isContainer(val)) {
-      pushFrame(val, { kind: 'object-value', out: frame.out, key })
+      // Ciclo em objeto: a chave é omitida (mesma regra de `undefined`).
+      if (!pushFrame(val, { kind: 'object-value', out: frame.out, key })) {
+        /* omitido */
+      }
     } else if (val !== undefined) {
       assignOwn(frame.out as Record<string, unknown>, key, val)
     }
@@ -216,11 +255,17 @@ function toAbortError(reason: unknown): Error {
   return error
 }
 
-/** Gera um token aleatório seguro para state OAuth. */
+/**
+ * Gera um token aleatório seguro para state OAuth (CSPRNG, 256 bits).
+ *
+ * Usa `randomBytes` de `node:crypto` (não o global `crypto`): o global
+ * `globalThis.crypto` só existe por padrão a partir do Node 19 — no Node 18
+ * (mínimo declarado no `engines`) ele exige a flag
+ * `--experimental-global-webcrypto` e `crypto` é `undefined`, quebrando o
+ * fluxo OAuth com `ReferenceError` (Rodada 9 da auditoria).
+ */
 export function generateStateToken(): string {
-  const array = new Uint8Array(32)
-  crypto.getRandomValues(array)
-  return Array.from(array, (b) => b.toString(16).padStart(2, '0')).join('')
+  return randomBytes(32).toString('hex')
 }
 
 /** Verifica se um token de state é válido (formato hex 64 chars). */

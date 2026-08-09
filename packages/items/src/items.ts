@@ -137,15 +137,20 @@ export class Items {
     signal?: AbortSignal,
   ): AsyncGenerator<Item, void, void> {
     assertValidId(sellerId, 'seller_id')
-    const fetchPage: PageFetcher<Item> = async (offset, limit, pageSignal) => {
-      const page = await this.transport.get<ItemSearchResponse>(`/users/${sellerId}/items/search`, {
+    const fetchPage: PageFetcher<unknown> = async (offset, limit, pageSignal) =>
+      this.transport.get<ItemSearchResponse>(`/users/${sellerId}/items/search`, {
         query: toQuery({ ...params, offset, limit }),
         ...(pageSignal !== undefined ? { signal: pageSignal } : {}),
       })
-      const results = await resolveSellerItems(this.transport, page.results)
-      return { ...page, results }
-    }
-    return paginate(fetchPage, paginationOptions(params, signal))
+    // Pagina sobre os RESULTADOS CRUS (IDs): o `paginate` avança pelos slots
+    // reais da API. Resolver os itens ANTES do paginate (filtragem de entradas
+    // inválidas) reduzia o length da página e o próximo offset sobrepunha a
+    // anterior — entregando itens DUPLICADOS. A resolução fica na
+    // transformação abaixo (pente fino).
+    return resolveSellerItemsStream(
+      this.transport,
+      paginate(fetchPage, paginationOptions(params, signal)),
+    )
   }
   /** Publica um anúncio (alias de `updateStatus('active')`). */
   publish(itemId: string): Promise<Item> {
@@ -197,4 +202,32 @@ async function resolveSellerItems(
   return mapWithConcurrency(ids, ITEM_RESOLUTION_CONCURRENCY, (id) =>
     transport.get<Item>(`/items/${id}`),
   )
+}
+
+/**
+ * Transforma o stream de entradas CRUS (IDs do `/users/{id}/items/search`)
+ * em itens completos, resolvendo em lotes com o mesmo limite de concorrência
+ * do `resolveSellerItems` (anti rate-limit).
+ *
+ * É usado pelo `listBySeller` para que o `paginate` avance pelos slots reais
+ * da API enquanto esta transformação resolve/filtra — sem isso, a filtragem
+ * de entradas inválidas reduzia o length da página e o offset seguinte
+ * sobrepunha a anterior (itens duplicados).
+ */
+async function* resolveSellerItemsStream(
+  transport: ResourceTransport,
+  raw: AsyncGenerator<unknown, void, void>,
+): AsyncGenerator<Item, void, void> {
+  let batch: unknown[] = []
+  for await (const entry of raw) {
+    batch.push(entry)
+    if (batch.length >= ITEM_RESOLUTION_CONCURRENCY) {
+      const current = batch
+      batch = []
+      yield* await resolveSellerItems(transport, current)
+    }
+  }
+  if (batch.length > 0) {
+    yield* await resolveSellerItems(transport, batch)
+  }
 }

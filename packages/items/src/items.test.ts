@@ -117,9 +117,48 @@ describe('Items', () => {
     }
 
     expect(ids).toEqual(['MLB1', 'MLB2', 'MLB3'])
+    // O paginate avança pelos slots reais da API (offset 0 → 2): as duas
+    // buscas acontecem ANTES da resolução em lote dos IDs.
     expect(transport.calls[0]?.path).toBe('/users/123/items/search')
-    expect(transport.calls[1]?.path).toBe('/items/MLB1')
-    expect(transport.calls[2]?.path).toBe('/items/MLB2')
+    expect(transport.calls[0]?.query?.offset).toBe(0)
+    expect(transport.calls[1]?.path).toBe('/users/123/items/search')
+    expect(transport.calls[1]?.query?.offset).toBe(2)
+    expect(transport.calls[2]?.path).toBe('/items/MLB1')
+    expect(transport.calls[3]?.path).toBe('/items/MLB2')
+    expect(transport.calls[4]?.path).toBe('/items/MLB3')
+  })
+
+  it('listBySeller() não duplica itens quando o offset avança e a resolução descarta entradas inválidas (pente fino)', async () => {
+    // Página 1 devolve 3 slots (um inválido — descartado na resolução); a
+    // página 2 deve começar em offset 3 (slots REAIS consumidos), NÃO em 2
+    // (3 slots menos o descartado) — antes, o offset sobrepunha a página
+    // anterior e o MLB2 duplicava. `total: null` força o avanço por slots.
+    const transport = fakeTransport((call) => {
+      if (call?.path?.startsWith('/users/')) {
+        const offset = Number(call?.query?.offset)
+        if (offset === 0) {
+          return { results: ['MLB1', 42, 'MLB2'], paging: { total: null, offset: 0, limit: 3 } }
+        }
+        if (offset === 3) {
+          return { results: ['MLB3', 'MLB4', 0], paging: { total: null, offset: 3, limit: 3 } }
+        }
+        return { results: [], paging: { total: null, offset, limit: 3 } }
+      }
+      const id = call?.path?.split('/').at(-1)
+      return { id, title: `Produto ${id}`, status: 'active' }
+    })
+
+    const ids: string[] = []
+    for await (const i of new Items(transport).listBySeller(123, { limit: 3 })) {
+      ids.push(i.id)
+    }
+
+    // O avanço usa os slots reais (3), não o length resolvido (2).
+    expect(transport.calls[1]?.path).toBe('/users/123/items/search')
+    expect(transport.calls[1]?.query?.offset).toBe(3)
+    // Cada item aparece exatamente UMA vez (sem duplicata do overlap).
+    expect(ids).toEqual(['MLB1', 'MLB2', 'MLB3', 'MLB4'])
+    expect(new Set(ids).size).toBe(ids.length)
   })
 
   it('deve iterar itens de todas as páginas com list()', async () => {

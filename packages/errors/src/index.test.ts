@@ -4,6 +4,7 @@ import {
   ForbiddenError,
   InputValidationError,
   NotFoundError,
+  OAuthError,
   RateLimitError,
   toApiError,
   UnauthorizedError,
@@ -45,6 +46,24 @@ describe('toApiError', () => {
     expect((err as RateLimitError).retryAfterSeconds).toBe(12)
   })
 
+  it('retry-after vazio ou só-espaço NÃO vira retry imediato sem backoff (F11, pente fino)', () => {
+    // `Number('')`/`Number('  ')` = 0: um header vazio faria o 429 ser
+    // retentado SEM backoff (rajada igual à do código pré-Rodada 6).
+    expect(
+      (toApiError(429, {}, headers({ 'retry-after': '' })) as RateLimitError).retryAfterSeconds,
+    ).toBeUndefined()
+    expect(
+      (toApiError(429, {}, headers({ 'retry-after': '  ' })) as RateLimitError).retryAfterSeconds,
+    ).toBeUndefined()
+    expect(
+      (toApiError(429, {}, headers({ 'retry-after': 'abc' })) as RateLimitError).retryAfterSeconds,
+    ).toBeUndefined()
+    // Número real continua sendo honrado.
+    expect(
+      (toApiError(429, {}, headers({ 'retry-after': '5' })) as RateLimitError).retryAfterSeconds,
+    ).toBe(5)
+  })
+
   it('deve capturar x-request-id dos headers', () => {
     const err = toApiError(500, {}, headers({ 'x-request-id': 'abc-123' }))
     expect(err.requestId).toBe('abc-123')
@@ -81,5 +100,30 @@ describe('InputValidationError', () => {
     expect(err).toBeInstanceOf(InputValidationError)
     expect(err.name).toBe('InputValidationError')
     expect(err.message).toBe('Entrada inválida')
+  })
+})
+
+describe('OAuthError', () => {
+  it('sanitiza a error_description do /oauth/token (anti log injection)', () => {
+    // Mesma classe do ApiError.message (Rodada 3): a description vem da
+    // resposta do endpoint de token (pode ecoar dados enviados) e, ao ser
+    // serializada (logs/APM), não pode forjar linhas de log.
+    const err = new OAuthError(
+      'invalid_request',
+      'bad state\r\n[ERROR] falsificação de log\u0085fim',
+    )
+    expect(err.message.split('\n')).toHaveLength(1)
+    expect(err.message.split('\r')).toHaveLength(1)
+    expect(err.message).not.toMatch(/[\u0085\x7f]/)
+    // Campos estruturados permanecem crus para matching de código.
+    expect(err.oauthError).toBe('invalid_request')
+    expect(err.errorDescription).toContain('[ERROR]')
+  })
+
+  it('sanitiza também o oauthError quando vira o message (sem description)', () => {
+    const err = new OAuthError('invalid_grant\r\nfake', undefined)
+    expect(err.message.split('\n')).toHaveLength(1)
+    // O campo máquina permanece intacto.
+    expect(err.oauthError).toBe('invalid_grant\r\nfake')
   })
 })

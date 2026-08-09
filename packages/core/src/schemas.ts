@@ -263,7 +263,16 @@ function isBlockedHttpHost(value: string): boolean {
   if (host.includes(':')) {
     // IPv6: loopback, link-local e ULA
     if (host === '::1' || host === '::' || host === '0:0:0:0:0:0:0:1') return true
-    if (host.startsWith('fe80') || host.startsWith('fc') || host.startsWith('fd')) return true
+    // Link-local é `fe80::/10` — cobre o primeiro hexteto de `fe80` a `febf`.
+    // Checar só `startsWith('fe80')` deixava `fe90::`/`fea0::`/`feb0::`/`febf::`
+    // (todos link-local válidos) passarem pelo schema (Rodada 9). O mascaramento
+    // de 10 bits (`0xffc0`) identifica exatamente o prefixo `fe80::/10`.
+    // ULA é `fc00::/7` (primeiro hexteto `fc00`–`fdff` → máscara `0xfe00`).
+    const firstHextet = Number.parseInt(host.split(':')[0] ?? '', 16)
+    if (Number.isFinite(firstHextet)) {
+      if ((firstHextet & 0xffc0) === 0xfe80) return true // link-local fe80::/10
+      if ((firstHextet & 0xfe00) === 0xfc00) return true // ULA fc00::/7
+    }
     // IPv4-mapeado em IPv6 (::ffff:127.0.0.1) — roteia para loopback/privado
     // em muitos sistemas; reaplica a checagem de octetos no IPv4 embutido.
     // O WHATWG URL normaliza para hex (`::ffff:7f00:1`), então tratamos as

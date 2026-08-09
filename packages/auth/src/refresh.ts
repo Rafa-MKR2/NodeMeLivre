@@ -58,6 +58,14 @@ export class TokenManager extends EventEmitter<TokenManagerEvents> implements To
     const token = await this.store.get()
     if (token === null) return undefined
     if (this.isExpiring(token)) {
+      // Sem refresh_token (ex.: client_credentials, sessão sem offline_access)
+      // não há como renovar — mas o token AINDA É VÁLIDO por até `leewayMs`:
+      // devolvê-lo aproveita as últimas requisições em vez de derrubá-las com
+      // `missing_refresh_token` (M2, pente fino). Já expirado de verdade, o
+      // refresh é tentado e o erro claro (`OAuthError`) é quem se propaga.
+      if (token.refreshToken === undefined && this.clock() < token.expiresAt) {
+        return token.accessToken
+      }
       await this.refresh()
       return (await this.store.get())?.accessToken
     }

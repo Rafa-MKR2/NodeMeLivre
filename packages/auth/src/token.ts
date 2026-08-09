@@ -123,7 +123,12 @@ export class InMemoryTokenStore implements TokenStore {
   }
 
   async set(token: AccessToken): Promise<void> {
-    this.token = this.createVersioned(token)
+    // Mesmo contrato do FileTokenStore (Rodada 9): `set` é sobrescrita, mas a
+    // versão é MONOTÔNICA — nunca regride. O código antigo chamava
+    // `createVersioned(token)` com default `version = 1`, RESETANDO o contador
+    // após um `compareAndSet` chegar a 2+; um CAS que esperava a versão antiga
+    // podia aceitar (ou rejeitar) escritas com base em uma versão regredida.
+    this.token = this.createVersioned(token, (this.token?.version ?? 0) + 1)
   }
 
   async clear(): Promise<void> {
@@ -521,24 +526,21 @@ export class FileTokenStore implements TokenStore {
   }
 
   private parseVersionedToken(raw: string): VersionedToken | null {
+    let parsed: unknown
     try {
-      const parsed = JSON.parse(raw) as VersionedToken
-      if (
-        parsed &&
-        typeof parsed.version === 'number' &&
-        typeof parsed.updatedAt === 'number' &&
-        typeof parsed.checksum === 'string' &&
-        parsed.token &&
-        isAccessToken(parsed.token)
-      ) {
-        return parsed
-      }
+      parsed = JSON.parse(raw) as unknown
     } catch {
-      // Tenta formato legacy (sem versionamento)
-      const legacy = parseToken(raw)
-      if (legacy) {
-        return this.createVersioned(legacy, 1)
-      }
+      return null
+    }
+    if (isVersionedToken(parsed)) return parsed
+    // Formato legacy (v1): o arquivo é um `AccessToken` direto (sem
+    // versionamento). O fallback legacy só rodava quando o `JSON.parse`
+    // LANÇAVA — um token v1 legítimo (JSON válido que não bate a shape de
+    // `VersionedToken`) caía em `return null` e o token era silenciosamente
+    // descartado na migração (M1, pente fino).
+    const legacy = parseToken(raw)
+    if (legacy) {
+      return this.createVersioned(legacy, 1)
     }
     return null
   }
@@ -564,6 +566,20 @@ function isAccessToken(value: unknown): value is AccessToken {
     typeof record.scope === 'string' &&
     typeof record.userId === 'number' &&
     typeof record.expiresAt === 'number'
+  )
+}
+
+/** Distingue o formato versionado (v2) do legacy (v1, `AccessToken` direto). */
+function isVersionedToken(value: unknown): value is VersionedToken {
+  if (typeof value !== 'object' || value === null) return false
+  const record = value as Record<string, unknown>
+  return (
+    typeof record.version === 'number' &&
+    typeof record.updatedAt === 'number' &&
+    typeof record.checksum === 'string' &&
+    typeof record.token === 'object' &&
+    record.token !== null &&
+    isAccessToken(record.token)
   )
 }
 

@@ -79,7 +79,7 @@ describe('Integração SDK real — mock server do Mercado Livre', () => {
       tokenStore: new FileTokenStore({ filePath }),
     })
 
-    const authUrl = ml.authorizationUrl('https://app.com/cb')
+    const authUrl = await ml.authorizationUrl('https://app.com/cb')
     expect(authUrl).toContain('code_challenge=')
 
     // O state é gerado e armazenado no stateStore automaticamente.
@@ -152,7 +152,7 @@ describe('Integração SDK real — mock server do Mercado Livre', () => {
       })
 
     const mlA = makeMl()
-    const authUrl = mlA.authorizationUrl('https://app.com/cb')
+    const authUrl = await mlA.authorizationUrl('https://app.com/cb')
     const state = new URL(authUrl).searchParams.get('state') as string
 
     // Instância B (outro OAuthClient) completa o fluxo com o MESMO state.

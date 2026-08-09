@@ -123,7 +123,7 @@ describe('Integração Multi-Instância - Fase 1', () => {
         httpClient: createHttpClient(),
       })
 
-      const authUrl = mlA.authorizationUrl({
+      const authUrl = await mlA.authorizationUrl({
         redirectUri: 'https://app.com/callback',
         state: 'shared-state-123',
       })
@@ -148,6 +148,38 @@ describe('Integração Multi-Instância - Fase 1', () => {
       expect(token.refreshToken).toBeTruthy()
     })
 
+    it('deve permitir consumeState em A e troca do code em B (multi-instância, Rodada 9)', async () => {
+      // Fluxo exatamente como documentado no README: validar o state no
+      // callback via consumeState (instância A) e DEPOIS trocar o code
+      // (instância B — outro processo/instância compartilhando o store).
+      const sharedStateStore = new OAuthStateStore()
+      const mk = () =>
+        new OAuthClient({
+          clientId: 'APP_ID',
+          clientSecret: 'SECRET',
+          pkce: true,
+          stateStore: sharedStateStore,
+          httpClient: createHttpClient(),
+        })
+      const mlA = mk()
+      const mlB = mk()
+
+      await mlA.authorizationUrl({
+        redirectUri: 'https://app.com/callback',
+        state: 'state-abc',
+      })
+      const entry = await mlA.consumeState('state-abc')
+      expect(entry).not.toBeNull()
+
+      // O verifier sobreviveu ao consume e está disponível na instância B:
+      // o body do /oauth/token deve conter code_verifier (senão → invalid_request).
+      const token = await mlB.exchangeCode('auth-code-456', {
+        redirectUri: 'https://app.com/callback',
+        state: 'state-abc',
+      })
+      expect(token.accessToken).toBeTruthy()
+    })
+
     it('deve falhar se code_verifier não estiver no StateStore', async () => {
       const stateStoreA = new OAuthStateStore()
       const stateStoreB = new OAuthStateStore()
@@ -160,7 +192,7 @@ describe('Integração Multi-Instância - Fase 1', () => {
         httpClient: createHttpClient(),
       })
 
-      mlA.authorizationUrl({
+      await mlA.authorizationUrl({
         redirectUri: 'https://app.com/callback',
         state: 'state-123',
       })

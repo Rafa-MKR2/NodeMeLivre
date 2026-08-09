@@ -90,6 +90,15 @@ describe('Webhooks.verify', () => {
     expect(() => new Webhooks().verify(notification, '1234567890')).not.toThrow()
   })
 
+  it('deve aceitar application_id do payload como string (falso negativo, Rodada 9)', () => {
+    // O ML pode entregar o webhook com `application_id` serializado como
+    // string ("123") — a comparação estrita antiga rejeitava a notificação
+    // legítima. A comparação agora é numérica nos dois lados.
+    const payloadString = { ...notification, application_id: '1234567890' }
+    const parsed = new Webhooks().verify(payloadString, 1234567890)
+    expect(parsed.application_id).toBe('1234567890')
+  })
+
   it('deve rejeitar notificação de outra aplicação', () => {
     expect(() => new Webhooks().verify(notification, 999)).toThrow(WebhookError)
   })
@@ -109,6 +118,26 @@ describe('Webhooks.verifyForUser', () => {
     expect(() =>
       new Webhooks().verifyForUser(notification, 1234567890, String(notification.user_id)),
     ).not.toThrow()
+  })
+
+  it('deve aceitar user_id do payload como string numérica (falso negativo)', () => {
+    // Mesmo vetor do A7 (application_id): o payload pode trazer `user_id`
+    // serializado como string ("123"). O `parse` exigia `number` estrito e
+    // rejeitava a notificação legítima — a coerção agora normaliza para
+    // número preservando o contrato tipado.
+    const payloadString = { ...notification, user_id: '468424240' }
+    const parsed = new Webhooks().verifyForUser(payloadString, 1234567890, 468424240)
+    expect(parsed.user_id).toBe(468424240)
+  })
+
+  it('deve rejeitar user_id do payload como string NÃO numérica', () => {
+    expect(() =>
+      new Webhooks().verifyForUser(
+        { ...notification, user_id: '../../etc/passwd' },
+        1234567890,
+        468424240,
+      ),
+    ).toThrow(WebhookError)
   })
 
   it('deve rejeitar notificação de outro vendedor', () => {

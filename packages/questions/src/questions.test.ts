@@ -48,6 +48,26 @@ describe('Questions', () => {
     })
   })
 
+  it('answer rejeita questionId inválido e text vazio antes de chamar a API (Rodada 9)', () => {
+    const transport = fakeTransport(() => ({}))
+    const questions = new Questions(transport)
+
+    // O ACHADO 4 corrigiu `reply`, mas `answer` (método público que o reply
+    // chama) aceitava question_id 0/negativo/string e text vazio direto no
+    // body — o mesmo vetor `question_id: null` por outro caminho.
+    expect(() => questions.answer({ questionId: 0, text: 'oi' })).toThrow(InputValidationError)
+    expect(() => questions.answer({ questionId: -1, text: 'oi' })).toThrow(InputValidationError)
+    expect(() => questions.answer({ questionId: 1.5, text: 'oi' })).toThrow(InputValidationError)
+    expect(() => questions.answer({ questionId: 'abc' as never, text: 'oi' })).toThrow(
+      InputValidationError,
+    )
+    expect(() => questions.answer({ questionId: 5, text: '' })).toThrow(InputValidationError)
+    expect(() => questions.answer({ questionId: 5, text: 123 as never })).toThrow(
+      InputValidationError,
+    )
+    expect(transport.calls).toHaveLength(0)
+  })
+
   it('rejeita question_id com path traversal ou não numérico', () => {
     const transport = fakeTransport(() => ({}))
     const questions = new Questions(transport)

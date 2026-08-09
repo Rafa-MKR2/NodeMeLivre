@@ -156,6 +156,110 @@ describe('HttpClient.request', () => {
     expect(refreshed).toHaveBeenCalledTimes(1)
   })
 
+  it('retry:false não ganha retry extra por ter auth+refresh (F1, pente fino)', async () => {
+    // O slot de refresh era somado ao maxAttempts — `retry:false` com auth
+    // presente ganhava 1 reenvio em 503/429 mesmo tendo sido desativado.
+    const spy = mockFetch(() => json({ message: 'down' }, 503))
+    const err = await client({
+      auth: provider(
+        'token-x',
+        vi.fn(async () => {}),
+      ),
+    })
+      .get('/items/MLB1', { retry: false })
+      .catch((e) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+  it('maxRetries:0 não ganha retry extra por ter auth+refresh (F1, pente fino)', async () => {
+    const spy = mockFetch(() => json({ message: 'down' }, 503))
+    const err = await client({
+      auth: provider(
+        'token-x',
+        vi.fn(async () => {}),
+      ),
+      retry: { maxRetries: 0 },
+    })
+      .get('/items/MLB1')
+      .catch((e) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+  it('auth:false não dispara refresh em 401 (F8, pente fino)', async () => {
+    const spy = mockFetch(() => json({ message: 'public only' }, 401))
+    const refreshed = vi.fn(async () => {})
+    const err = await client({ auth: provider('token-x', refreshed) })
+      .get('/public', { auth: false })
+      .catch((e) => e)
+    expect(err).toBeInstanceOf(UnauthorizedError)
+    expect(refreshed).not.toHaveBeenCalled()
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+  it('abort do usuário vira AbortError e não é retentado (F2, pente fino)', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const spy = mockFetch(() => {
+      throw new Error('fetch interrompido')
+    })
+
+    const err = await client()
+      .get('/items/MLB1', { signal: controller.signal })
+      .catch((e) => e)
+
+    // Sem abort: GET idempotente retentaria 3x; abortado, o AbortError sai
+    // imediatamente (contrato `e.name === AbortError`, mesmo do paginate).
+    expect(err).toBeInstanceOf(Error)
+    expect((err as Error).name).toBe('AbortError')
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+  it('abort do usuário com fetch real rejeitando por abort também não retenta (F2, pente fino)', async () => {
+    const controller = new AbortController()
+    const spy = vi.fn(async (_url: unknown, init: RequestInit | undefined) => {
+      // Simula o fetch real: o abort rejeita a promise quando o signal dispara.
+      await new Promise<void>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => {
+          const e = new Error('This operation was aborted')
+          e.name = 'AbortError'
+          reject(e)
+        })
+      })
+    })
+    const http = new HttpClient({
+      fetchImpl: spy as unknown as typeof fetch,
+      retry: { maxRetries: 3, jitter: false },
+    })
+
+    const pending = http.get('/items/MLB1', { signal: controller.signal }).catch((e) => e)
+    controller.abort()
+    const err = await pending
+    expect((err as Error).name).toBe('AbortError')
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+  it('refresh que falha propaga o erro tipado do 401 original (M4, pente fino)', async () => {
+    mockFetch(() => ({
+      body: { message: 'expired' },
+      status: 401,
+      headers: { 'x-request-id': 'req-123' },
+    }))
+    const refreshed = vi.fn(async () => {
+      throw new Error('invalid_grant — refresh_token rotacionado')
+    })
+    const err = await client({ auth: provider('token-old', refreshed), retry: { maxRetries: 0 } })
+      .get('/users/me')
+      .catch((e) => e)
+    // O contrato de erro (Rodada 3) é preservado: o chamador recebe o 401
+    // tipado (status/requestId), não o erro cru do refresh.
+    expect(err).toBeInstanceOf(UnauthorizedError)
+    expect((err as UnauthorizedError).status).toBe(401)
+    expect((err as UnauthorizedError).requestId).toBe('req-123')
+    expect(refreshed).toHaveBeenCalledTimes(1)
+  })
+
   it('não deve injetar headers de resposta por padrão', async () => {
     mockFetch((_url, init) => {
       const headers = new Headers(init.headers)
@@ -293,6 +397,20 @@ describe('HttpClient.request', () => {
     mockFetch(() => ({ status: 204, body: undefined }))
     const result = await client().delete<undefined>('/items/MLB1')
     expect(result).toBeUndefined()
+  })
+
+  it('deve devolver null (não a string "null") para corpo JSON literal null (Rodada 9)', async () => {
+    mockFetch(() => json(null))
+    const result = await client().get<unknown>('/endpoint')
+    expect(result).toBeNull()
+    expect(typeof result).not.toBe('string')
+  })
+
+  it('deve devolver false e 0 (valores JSON falsy) preservados (Rodada 9)', async () => {
+    mockFetch(() => json(false))
+    expect(await client().get<unknown>('/endpoint')).toBe(false)
+    mockFetch(() => json(0))
+    expect(await client().get<unknown>('/endpoint')).toBe(0)
   })
 
   it('deve devolver ArrayBuffer com responseType arraybuffer', async () => {

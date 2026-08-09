@@ -1,7 +1,7 @@
 import { ApiError, ConfigurationError, OAuthError } from '@nodemelivre/errors'
 import { HttpClient, type HttpClientOptions } from '@nodemelivre/http'
 import { generateCodeChallenge, generateCodeVerifier, type PkceMethod } from './pkce.js'
-import type { OAuthStateEntry, OAuthStateStore } from './state.js'
+import type { OAuthStateEntry, OAuthStateStoreContract } from './state.js'
 import type { AccessToken } from './token.js'
 
 const TOKEN_PATH = '/oauth/token'
@@ -47,7 +47,7 @@ export interface OAuthOptions {
    * `consumeState` valida o state recebido no callback.
    * Também armazena o `code_verifier` PKCE no metadata do state.
    */
-  stateStore?: OAuthStateStore
+  stateStore?: OAuthStateStoreContract
   /**
    * Habilita PKCE (RFC 7636) no fluxo `authorization_code`.
    *
@@ -103,7 +103,7 @@ export class OAuthClient {
   private readonly httpClient: HttpClient
   private readonly pkceEnabled: boolean
   private readonly pkceMethod: PkceMethod
-  readonly stateStore: OAuthStateStore | undefined
+  readonly stateStore: OAuthStateStoreContract | undefined
   /**
    * Fallback in-memory para code_verifier quando não há stateStore
    * (compatibilidade). Limitado e com limpeza — sem stateStore, cada
@@ -129,14 +129,21 @@ export class OAuthClient {
       typeof pkce === 'object' && pkce !== null && pkce.method !== undefined ? pkce.method : 'S256'
   }
 
-  /** URL para redirecionar o vendedor ao navegador de autorização do Mercado Livre. */
-  authorizationUrl(options: AuthorizationUrlOptions): string {
+  /**
+   * URL para redirecionar o vendedor ao navegador de autorização do Mercado Livre.
+   *
+   * Assíncrona desde o contrato async do stateStore (o `state` e o
+   * `code_verifier` podem ser persistidos num backing store remoto como
+   * Redis — o `await` garante que ambos já estão gravados quando a URL
+   * retorna, mesmo em multi-instância).
+   */
+  async authorizationUrl(options: AuthorizationUrlOptions): Promise<string> {
     const url = new URL(`https://${authDomain(this.siteId)}/authorization`)
     url.searchParams.set('response_type', 'code')
     url.searchParams.set('client_id', this.clientId)
     url.searchParams.set('redirect_uri', options.redirectUri)
 
-    const state = this.resolveState(options)
+    const state = await this.resolveState(options)
     if (state !== undefined) {
       url.searchParams.set('state', state)
     }
@@ -149,7 +156,7 @@ export class OAuthClient {
         if (this.stateStore !== undefined) {
           // Armazena o code_verifier no metadata do state para que possa ser
           // recuperado no callback mesmo em outra instância (multi-processo)
-          this.stateStore.updateMetadata(state, { codeVerifier: verifier })
+          await this.stateStore.updateMetadata(state, { codeVerifier: verifier })
         } else {
           // Fallback in-memory para compatibilidade (single-processo)
           this.setCodeVerifier(state, verifier)
@@ -165,16 +172,20 @@ export class OAuthClient {
    * se não houver `stateStore` configurado, o state for inexistente/expirado
    * ou já tiver sido consumido.
    */
-  consumeState(state: string): OAuthStateEntry | null {
-    const entry = this.stateStore?.consume(state) ?? null
-    // ACHADO 31 (Rodada 8): o consume apaga a entry do store — junto com o
-    // `metadata.codeVerifier` do PKCE. Se o chamador seguir o fluxo
-    // documentado ("validar no callback via consumeState e depois trocar o
-    // code"), o verifier não estaria mais disponível e o `/oauth/token`
-    // responderia `invalid_request`. Estacionamos o verifier no fallback
-    // in-memory (com TTL e limite) para a troca seguinte funcionar.
+  async consumeState(state: string): Promise<OAuthStateEntry | null> {
+    const entry = (await this.stateStore?.consume(state)) ?? null
+    // ACHADO 31 (Rodada 8) + Rodada 9: o consume apaga a entry do store —
+    // junto com o `metadata.codeVerifier` do PKCE. O verifier é estacionado
+    // (1) no stateStore compartilhado (multi-instância/multi-processo — a
+    // instância que troca o code recupera de lá) e (2) no fallback in-memory
+    // (compatibilidade sem stateStore). Sem isso, o fluxo documentado
+    // ("validar no callback via consumeState e depois trocar o code")
+    // enviava o `/oauth/token` sem `code_verifier` → `invalid_request`.
     const verifier = entry?.metadata?.codeVerifier
     if (typeof verifier === 'string') {
+      if (this.stateStore !== undefined) {
+        await this.stateStore.parkCodeVerifier(state, verifier)
+      }
       this.setCodeVerifier(state, verifier)
     }
     return entry
@@ -204,16 +215,22 @@ export class OAuthClient {
     }
   }
 
-  /** Recupera o code_verifier PKCE do metadata do state (stateStore ou fallback in-memory). */
-  getCodeVerifierFromState(state: string): string | undefined {
-    // Primeiro tenta no stateStore (multi-processo)
+  /** Recupera o code_verifier PKCE do metadata do state (stateStore, estacionado ou fallback). */
+  async getCodeVerifierFromState(state: string): Promise<string | undefined> {
+    // 1. State ainda ativo no stateStore (não consumido) — multi-processo.
     if (this.stateStore !== undefined) {
-      const entry = this.stateStore.get(state)
+      const entry = await this.stateStore.get(state)
       if (entry?.metadata?.codeVerifier) {
         return entry.metadata.codeVerifier as string
       }
     }
-    // Fallback in-memory (compatibilidade single-processo)
+    // 2. Verifier ESTACIONADO no stateStore compartilhado (consumido por
+    //    outra instância — Rodada 9: multi-instância com o mesmo store).
+    if (this.stateStore !== undefined) {
+      const parked = await this.stateStore.getParkedCodeVerifier(state)
+      if (parked !== undefined) return parked
+    }
+    // 3. Fallback in-memory (compatibilidade single-processo sem stateStore).
     const stored = this.codeVerifiers.get(state)
     if (stored === undefined) return undefined
     if (Date.now() - stored.createdAt > PKCE_TTL_MS) {
@@ -224,14 +241,14 @@ export class OAuthClient {
   }
 
   /** @deprecated Use getCodeVerifierFromState. Mantido para compatibilidade. */
-  getCodeVerifier(state: string): string | undefined {
+  async getCodeVerifier(state: string): Promise<string | undefined> {
     return this.getCodeVerifierFromState(state)
   }
 
-  private resolveState(options: AuthorizationUrlOptions): string | undefined {
+  private async resolveState(options: AuthorizationUrlOptions): Promise<string | undefined> {
     if (this.stateStore === undefined) return options.state
     if (options.state !== undefined) {
-      this.stateStore.register(options.state, options.redirectUri, options.metadata)
+      await this.stateStore.register(options.state, options.redirectUri, options.metadata)
       return options.state
     }
     return this.stateStore.create(options.redirectUri, options.metadata)
@@ -250,7 +267,9 @@ export class OAuthClient {
     if (this.pkceEnabled) {
       verifier =
         options.codeVerifier ??
-        (options.state !== undefined ? this.getCodeVerifierFromState(options.state) : undefined)
+        (options.state !== undefined
+          ? await this.getCodeVerifierFromState(options.state)
+          : undefined)
       if (verifier !== undefined) body.code_verifier = verifier
     }
     try {

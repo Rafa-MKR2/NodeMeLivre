@@ -145,6 +145,17 @@ describe('Schemas genéricos do core', () => {
       'http://[2002:7f00:1::]/x', // 6to4 → 127.0.0.1
       'http://[2002:a00:1::]/x', // 6to4 → 10.0.0.1 (privado)
       'http://[::7f00:1]/x', // IPv4-compatível → 127.0.0.1
+      // Link-local IPv6 é fe80::/10 (fe80–febf) — o bloqueio antigo só
+      // cobria o primeiro bloco (`fe80`); os demais passavam (Rodada 9).
+      'http://[fe80::1]/x',
+      'http://[fe90::1]/x',
+      'http://[fea0::1]/x',
+      'http://[feb0::1]/x',
+      'http://[febf::1]/x',
+      // ULA fc00::/7 (fc00–fdff)
+      'http://[fc00::1]/x',
+      'http://[fd00::1]/x',
+      'http://[fdff::1]/x',
     ]
     for (const url of blocked) {
       expect(httpUrlSchema.check(url)).toEqual([

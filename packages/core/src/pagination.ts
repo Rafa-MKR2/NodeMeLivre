@@ -74,8 +74,15 @@ export async function* paginate<T>(
     const page = await fetchPage(offset, limit, signal)
     const results = page.results
 
-    const total = page.paging.total
-    if (total !== null && offset + results.length >= total) {
+    const rawTotal = page.paging.total
+    // `paging.total` é `number | null`, mas um gateway/proxy pode entregar a
+    // total como STRING (ex.: "4"): o `>=` em JS coercia `"0"` (string) a 0 e
+    // ENCURTAVA a paginação na primeira página (perda silenciosa de dados) e
+    // `"abc"` a NaN (nunca encerrava — loop). Coerção explícita: string
+    // parseável → number; null/NaN → "total desconhecido" (termina por página
+    // vazia ou pelo guard de página repetida) (F4, pente fino).
+    const total = rawTotal === null ? null : Number(rawTotal)
+    if (total !== null && Number.isFinite(total) && offset + results.length >= total) {
       // Última página: entrega os itens e encerra.
       for (const item of results) {
         signal?.throwIfAborted()
@@ -95,8 +102,13 @@ export async function* paginate<T>(
     // exigiria o mesmo primeiro item repetido entre páginas consecutivas —
     // na prática só ocorre com overlap genuíno (parar é o comportamento
     // correto), e o `paging.total` autoritativo é checado antes.
-    const firstKey = JSON.stringify(results[0])
-    if (firstKey !== undefined && firstKey === previousFirstKey) return
+    //
+    // `?? null` garante que um primeiro item `undefined` (fetcher customizado
+    // do integrador) ainda produza uma chave estável — sem isso, páginas de
+    // `[undefined]` nunca batiam com a chave anterior e o guard nunca
+    // disparava (loop infinito na mesma classe do ACHADO 17).
+    const firstKey = JSON.stringify(results[0] ?? null)
+    if (firstKey === previousFirstKey) return
     previousFirstKey = firstKey
 
     for (const item of results) {

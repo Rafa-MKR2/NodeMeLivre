@@ -19,7 +19,7 @@ async function main(): Promise<void> {
   const ml = createMercadoLivre({ clientId, clientSecret, siteId })
 
   // 1. URL para o vendedor autorizar a aplicação.
-  const url = ml.authorizationUrl(redirectUri, 'estado-anti-csrf')
+  const url = await ml.authorizationUrl(redirectUri, 'estado-anti-csrf')
   console.log(`Abra: ${url}`)
 
   // 2. Após o redirect, o servidor recebe `?code=...&state=estado-anti-csrf`.

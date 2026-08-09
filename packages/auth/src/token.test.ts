@@ -29,6 +29,19 @@ describe('InMemoryTokenStore', () => {
     await store.clear()
     expect(await store.get()).toBeNull()
   })
+
+  it('set() incrementa a versão (monotônica — mesmo contrato do FileTokenStore, Rodada 9)', async () => {
+    const store = new InMemoryTokenStore()
+    await store.compareAndSet(token({ accessToken: 'v1' }), null) // versão 1
+    await store.compareAndSet(token({ accessToken: 'v2' }), null) // versão 2
+
+    // O código antigo RESETAVA a versão para 1 aqui (createVersioned default),
+    // regredindo o contador e quebrando CAS concorrentes que esperavam v2.
+    await store.set(token({ accessToken: 'v3' }))
+    const after = await store.getWithVersion()
+    expect(after?.version).toBe(3)
+    expect(after?.token.accessToken).toBe('v3')
+  })
 })
 
 describe('FileTokenStore', () => {
@@ -100,6 +113,24 @@ describe('FileTokenStore', () => {
     const { writeFile } = await import('node:fs/promises')
     await writeFile(join(dir, 'broken.json'), 'not json')
     expect(await store.get()).toBeNull()
+  })
+
+  it('migra arquivo legacy v1 (AccessToken direto) para versionado (M1, pente fino)', async () => {
+    // Um token v1 (pré-versionamento) é um JSON VÁLIDO que não bate a shape
+    // de `VersionedToken` — o fallback legacy só rodava quando o JSON.parse
+    // LANÇAVA, então um token v1 legítimo era silenciosamente descartado
+    // (perda de token na migração) e o usuário era forçado a re-autenticar.
+    const filePath = join(dir, 'legacy.json')
+    const legacy = token({ accessToken: 'access-legacy' })
+    const { writeFile } = await import('node:fs/promises')
+    await writeFile(filePath, JSON.stringify(legacy))
+
+    const store = new FileTokenStore({ filePath })
+    const versioned = await store.getWithVersion()
+    expect(versioned).not.toBeNull()
+    expect(versioned?.token.accessToken).toBe('access-legacy')
+    expect(versioned?.version).toBe(1)
+    expect((await store.get())?.accessToken).toBe('access-legacy')
   })
 
   it('deve escrever token e lease com permissão 0o600 (disciplina de segredos)', async () => {

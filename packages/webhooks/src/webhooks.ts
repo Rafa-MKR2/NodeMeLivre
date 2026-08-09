@@ -49,7 +49,10 @@ export class Webhooks {
    */
   verify(payload: unknown, applicationId: number | string): WebhookNotification {
     const notification = this.parse(payload)
-    if (notification.application_id !== Number(applicationId)) {
+    // Comparação NUMÉRICA nos dois lados (Rodada 9): o payload pode trazer
+    // `application_id` como string (`"123"`) — a comparação estrita antiga
+    // (`!==` entre string e Number) rejeitava uma notificação legítima.
+    if (Number(notification.application_id) !== Number(applicationId)) {
       throw new WebhookError(
         `Webhook rejeitado: application_id ${sanitizeLog(notification.application_id)} não pertence à aplicação ${sanitizeLog(applicationId)}`,
       )
@@ -72,7 +75,9 @@ export class Webhooks {
     expectedUserId: number | string,
   ): WebhookNotification {
     const notification = this.verify(payload, applicationId)
-    if (notification.user_id !== Number(expectedUserId)) {
+    // Comparação numérica nos dois lados (mesma disciplina do A7): após o
+    // `parse`, `user_id` já é number; o esperado pode chegar como string.
+    if (Number(notification.user_id) !== Number(expectedUserId)) {
       throw new WebhookError(
         `Webhook rejeitado: user_id ${sanitizeLog(notification.user_id)} não pertence ao vendedor ${sanitizeLog(expectedUserId)}`,
       )
@@ -95,7 +100,21 @@ export class Webhooks {
       throw new WebhookError('Webhook inválido: resource e topic devem ser strings')
     }
     if (typeof data.user_id !== 'number') {
-      throw new WebhookError('Webhook inválido: user_id deve ser um número')
+      // Mesma classe do A7 (Rodada 9): o ML (ou um gateway/mock) pode
+      // entregar `user_id` serializado como string numérica ("123"). Sem a
+      // coerção, `verifyForUser` rejeitava uma notificação legítima — o fix
+      // do A7 cobriu o `application_id`, mas o `user_id` (que tem checagem de
+      // tipo no `parse`) ficou de fora. Strings NÃO numéricas continuam
+      // rejeitadas (NaN nunca bate com o vendedor esperado).
+      if (
+        typeof data.user_id === 'string' &&
+        data.user_id.trim() !== '' &&
+        Number.isSafeInteger(Number(data.user_id))
+      ) {
+        data.user_id = Number(data.user_id)
+      } else {
+        throw new WebhookError('Webhook inválido: user_id deve ser um número')
+      }
     }
     if (!TOPICS.includes(data.topic as WebhookTopic)) {
       throw new WebhookError(`Webhook inválido: tópico desconhecido "${sanitizeLog(data.topic)}"`)

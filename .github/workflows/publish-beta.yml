@@ -42,8 +42,10 @@ jobs:
       - name: Auditoria de dependências
         run: npm audit --omit=dev --audit-level=high
 
-      - name: Segurança (vetores da auditoria)
-        run: npm run security:check
+      - name: Segurança (vetores das 9 rodadas + contrato de contagem)
+        # O --expect-checks faz o job falhar se o total de checagens do
+        # security:check mudar (regressão de cobertura = publish bloqueado).
+        run: npm run security:check -- --expect-checks 70
 
       - name: Publish to GitHub Packages
         run: |

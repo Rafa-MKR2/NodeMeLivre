@@ -29,10 +29,19 @@ const RATE_LIMIT_HEADERS = {
  */
 export const MAX_WAIT_MS = 5 * 60 * 1000
 
+/**
+ * Parse estrito de headers numéricos do rate limit.
+ *
+ * `Number('')`/`Number('  ')` = 0 e `Number('0x10')` = 16: um gateway que
+ * envie `x-rate-limit-remaining` vazio/só-espaço seria tratado como
+ * "esgotado" e o SDK dormiria até o reset — DoS auto-infligido. Exige um
+ * inteiro decimal real (F3, pente fino).
+ */
 function parsePositive(raw: string | null): number | undefined {
   if (raw === null) return undefined
+  if (!/^\d+$/.test(raw.trim())) return undefined
   const value = Number(raw)
-  return Number.isFinite(value) && value >= 0 ? value : undefined
+  return Number.isSafeInteger(value) ? value : undefined
 }
 
 /**
@@ -105,7 +114,12 @@ export class RateLimiter {
   async waitIfNeeded(key: string): Promise<void> {
     const state = this.states.get(key)
     if (state === undefined) return
-    if (state.remaining !== undefined && state.remaining > 0) return
+    // Sem informação de restante (header ausente/vazio/corrompido) NÃO
+    // bloqueia: só `remaining === 0` explícito indica recurso esgotado. Antes,
+    // um gateway que omitisse o header fazia a requisição dormir até o reset
+    // mesmo com o recurso disponível (F3, pente fino).
+    if (state.remaining === undefined) return
+    if (state.remaining > 0) return
 
     const resetAt = state.resetAt ?? 0
     let delayMs = resetAt - Date.now()

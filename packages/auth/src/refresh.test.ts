@@ -81,6 +81,26 @@ describe('TokenManager', () => {
     expect(err).toBeInstanceOf(OAuthError)
   })
 
+  it('sem refresh_token, devolve o token AINDA VÁLIDO em vez de quebrar as últimas requisições (M2, pente fino)', async () => {
+    const { manager, store } = createManager()
+    // Dentro da janela de leeway (60s) mas ainda NÃO expirado: não há
+    // refresh_token (ex.: client_credentials) e renovar lançaria — o token
+    // ainda funciona por ~30s e deve ser usado, não descartado.
+    const token = storedToken({ expiresAt: NOW + 30_000 })
+    delete token.refreshToken
+    await store.set(token)
+    await expect(manager.getToken()).resolves.toBe('access-1')
+  })
+
+  it('sem refresh_token e JÁ expirado, o erro claro (OAuthError) se propaga (M2, pente fino)', async () => {
+    const { manager, store } = createManager()
+    const token = storedToken({ expiresAt: NOW - 1000 })
+    delete token.refreshToken
+    await store.set(token)
+    const err = await manager.getToken().catch((e) => e)
+    expect(err).toBeInstanceOf(OAuthError)
+  })
+
   it('deve deduplicar chamadas concorrentes de refresh', async () => {
     const { manager, oauth, store } = createManager()
     await store.set(storedToken({ expiresAt: NOW - 1000 }))

@@ -17,7 +17,7 @@ async function main(): Promise<void> {
 
   const ml = createMercadoLivre({ clientId, clientSecret, siteId })
 
-  const url = ml.authorizationUrl('http://localhost:3000/callback', 'estado-anti-csrf')
+  const url = await ml.authorizationUrl('http://localhost:3000/callback', 'estado-anti-csrf')
   console.log(`Abra: ${url}`)
   await ml.authenticate('http://localhost:3000/callback', 'CODIGO_RECEBIDO_NO_CALLBACK')
 

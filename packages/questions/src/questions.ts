@@ -43,6 +43,19 @@ const questionSearchSchema: ValidationSchema<QuestionSearchParams> = object<Ques
   limit: optional(number({ integer: true, positive: true })),
 })
 
+/**
+ * Payload de resposta — falha rápido antes de chamar a API (Rodada 9).
+ *
+ * O `reply()` valida o `questionId`, mas o método público `answer()` aceitava
+ * `question_id: 0`, negativo, `NaN`, string ou `text` vazio direto no body
+ * (o mesmo vetor do ACHADO 4 — `question_id: null` — só que pelo caminho
+ * `answer`, que o fix do ACHADO 4 não cobriu).
+ */
+const questionAnswerSchema: ValidationSchema<QuestionAnswerInput> = object<QuestionAnswerInput>({
+  questionId: number({ integer: true, positive: true }),
+  text: string({ minLength: 1 }),
+})
+
 /** Recursos de perguntas e respostas. */
 export class Questions {
   constructor(private readonly transport: ResourceTransport) {}
@@ -98,6 +111,7 @@ export class Questions {
 
   /** Responde uma pergunta pendente. */
   answer(input: QuestionAnswerInput): Promise<QuestionAnswer> {
+    assertValid(questionAnswerSchema, input)
     return this.transport.post('/answers', {
       question_id: input.questionId,
       text: input.text,

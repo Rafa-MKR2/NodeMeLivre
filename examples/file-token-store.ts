@@ -23,7 +23,7 @@ async function main(): Promise<void> {
   // Se ainda não houver token, o fluxo de autorização roda uma vez.
   const existing = await ml.tokens.current()
   if (existing === null) {
-    const url = ml.authorizationUrl('http://localhost:3000/callback')
+    const url = await ml.authorizationUrl('http://localhost:3000/callback')
     console.log(`Autorize em: ${url}`)
     // Após o callback, use ml.authenticate(redirectUri, code).
     return

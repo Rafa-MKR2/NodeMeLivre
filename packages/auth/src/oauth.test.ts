@@ -47,78 +47,78 @@ describe('OAuthClient.config', () => {
 })
 
 describe('OAuthClient.authorizationUrl', () => {
-  it('deve montar a URL de autorização para MLB', () => {
-    const url = client().authorizationUrl({ redirectUri: 'https://app.com/callback' })
+  it('deve montar a URL de autorização para MLB', async () => {
+    const url = await client().authorizationUrl({ redirectUri: 'https://app.com/callback' })
     expect(url).toContain('https://auth.mercadolivre.com.br/authorization')
     expect(url).toContain('response_type=code')
     expect(url).toContain('client_id=APP_ID')
     expect(url).toContain('redirect_uri=https%3A%2F%2Fapp.com%2Fcallback')
   })
 
-  it('deve incluir state quando informado', () => {
-    const url = client().authorizationUrl({
+  it('deve incluir state quando informado', async () => {
+    const url = await client().authorizationUrl({
       redirectUri: 'https://app.com/callback',
       state: 'csrf-token',
     })
     expect(url).toContain('state=csrf-token')
   })
 
-  it('deve usar domínio correto por site', () => {
+  it('deve usar domínio correto por site', async () => {
     const arg = new OAuthClient({ clientId: 'a', clientSecret: 'b', siteId: 'MLA' })
-    expect(arg.authorizationUrl({ redirectUri: 'https://x.com' })).toContain(
+    expect(await arg.authorizationUrl({ redirectUri: 'https://x.com' })).toContain(
       'https://auth.mercadolibre.com.ar/authorization',
     )
   })
 })
 
 describe('OAuthClient.stateStore (CSRF)', () => {
-  it('deve gerar e armazenar state automaticamente quando há stateStore', () => {
+  it('deve gerar e armazenar state automaticamente quando há stateStore', async () => {
     const { ml, store } = clientWithStateStore()
-    const url = ml.authorizationUrl({ redirectUri: 'https://app.com/callback' })
+    const url = await ml.authorizationUrl({ redirectUri: 'https://app.com/callback' })
 
     const state = new URL(url).searchParams.get('state')
     expect(state).toBeTruthy()
-    expect(store.get(state as string)?.redirectUri).toBe('https://app.com/callback')
+    expect((await store.get(state as string))?.redirectUri).toBe('https://app.com/callback')
   })
 
-  it('deve armazenar metadata junto ao state gerado', () => {
+  it('deve armazenar metadata junto ao state gerado', async () => {
     const { ml, store } = clientWithStateStore()
-    const url = ml.authorizationUrl({
+    const url = await ml.authorizationUrl({
       redirectUri: 'https://app.com/callback',
       metadata: { redirectTo: '/admin' },
     })
     const state = new URL(url).searchParams.get('state')
-    expect(store.get(state as string)?.metadata).toEqual({
+    expect((await store.get(state as string))?.metadata).toEqual({
       redirectTo: '/admin',
     })
   })
 
-  it('deve validar e consumir o state no callback', () => {
+  it('deve validar e consumir o state no callback', async () => {
     const { ml, store } = clientWithStateStore()
-    const url = ml.authorizationUrl({ redirectUri: 'https://app.com/callback' })
+    const url = await ml.authorizationUrl({ redirectUri: 'https://app.com/callback' })
     const state = new URL(url).searchParams.get('state') as string
 
-    const entry = ml.consumeState(state)
+    const entry = await ml.consumeState(state)
     expect(entry?.redirectUri).toBe('https://app.com/callback')
     expect(store.size).toBe(0)
-    expect(ml.consumeState(state)).toBeNull()
+    expect(await ml.consumeState(state)).toBeNull()
   })
 
-  it('deve armazenar state explícito quando informado com stateStore', () => {
+  it('deve armazenar state explícito quando informado com stateStore', async () => {
     const { ml, store } = clientWithStateStore()
-    const url = ml.authorizationUrl({ redirectUri: 'https://app.com/cb', state: 'meu-state' })
+    const url = await ml.authorizationUrl({ redirectUri: 'https://app.com/cb', state: 'meu-state' })
 
     expect(url).toContain('state=meu-state')
-    expect(store.get('meu-state')?.redirectUri).toBe('https://app.com/cb')
+    expect((await store.get('meu-state'))?.redirectUri).toBe('https://app.com/cb')
   })
 
-  it('deve retornar null para state inválido', () => {
+  it('deve retornar null para state inválido', async () => {
     const { ml } = clientWithStateStore()
-    expect(ml.consumeState('nao-existe')).toBeNull()
+    expect(await ml.consumeState('nao-existe')).toBeNull()
   })
 
-  it('deve retornar null no consumeState sem stateStore', () => {
-    expect(client().consumeState('qualquer')).toBeNull()
+  it('deve retornar null no consumeState sem stateStore', async () => {
+    expect(await client().consumeState('qualquer')).toBeNull()
   })
 
   it('consumeState preserva o code_verifier para a troca do code (Rodada 8)', async () => {
@@ -142,13 +142,13 @@ describe('OAuthClient.stateStore (CSRF)', () => {
       pkce: true,
     })
     // Estado gerado e armazenado pelo stateStore com o code_verifier no metadata.
-    const url = ml.authorizationUrl({ redirectUri: 'https://app.com/callback' })
+    const url = await ml.authorizationUrl({ redirectUri: 'https://app.com/callback' })
     const state = new URL(url).searchParams.get('state') as string
 
     // Fluxo documentado no README: valida/consome o state no callback (CSRF)…
-    const entry = ml.consumeState(state)
+    const entry = await ml.consumeState(state)
     expect(entry).not.toBeNull()
-    expect(ml.consumeState(state)).toBeNull() // consumido de fato
+    expect(await ml.consumeState(state)).toBeNull() // consumido de fato
 
     // …e só então troca o code: o code_verifier NÃO pode ter ido junto.
     const token = await ml.exchangeCode('code-1', {
@@ -206,32 +206,35 @@ describe('OAuthClient.exchangeCode', () => {
 })
 
 describe('OAuthClient PKCE (RFC 7636)', () => {
-  it('deve incluir code_challenge e code_challenge_method=S256 na URL de autorização', () => {
-    const url = client().authorizationUrl({ redirectUri: 'https://app.com/callback', state: 's1' })
+  it('deve incluir code_challenge e code_challenge_method=S256 na URL de autorização', async () => {
+    const url = await client().authorizationUrl({
+      redirectUri: 'https://app.com/callback',
+      state: 's1',
+    })
     expect(url).not.toContain('code_challenge')
   })
 
-  it('deve incluir code_challenge (S256) na URL quando pkce=true', () => {
+  it('deve incluir code_challenge (S256) na URL quando pkce=true', async () => {
     const ml = new OAuthClient({ clientId: 'APP_ID', clientSecret: 'SECRET', pkce: true })
-    const url = ml.authorizationUrl({ redirectUri: 'https://app.com/callback', state: 's1' })
+    const url = await ml.authorizationUrl({ redirectUri: 'https://app.com/callback', state: 's1' })
 
     const parsed = new URL(url)
     expect(parsed.searchParams.get('code_challenge_method')).toBe('S256')
     expect(parsed.searchParams.get('code_challenge')).toBeTruthy()
   })
 
-  it('deve usar method=plain quando configurado', () => {
+  it('deve usar method=plain quando configurado', async () => {
     const ml = new OAuthClient({
       clientId: 'APP_ID',
       clientSecret: 'SECRET',
       pkce: { method: 'plain' },
     })
-    const url = ml.authorizationUrl({ redirectUri: 'https://app.com/callback', state: 's1' })
+    const url = await ml.authorizationUrl({ redirectUri: 'https://app.com/callback', state: 's1' })
 
     const parsed = new URL(url)
     expect(parsed.searchParams.get('code_challenge_method')).toBe('plain')
     const challenge = parsed.searchParams.get('code_challenge')
-    expect(ml.getCodeVerifier('s1')).toBe(challenge)
+    expect(await ml.getCodeVerifier('s1')).toBe(challenge)
   })
 
   it('deve armazenar o code_verifier por state e recuperá-lo na troca', async () => {
@@ -250,7 +253,7 @@ describe('OAuthClient PKCE (RFC 7636)', () => {
     })
 
     const ml = new OAuthClient({ clientId: 'APP_ID', clientSecret: 'SECRET', pkce: true })
-    ml.authorizationUrl({ redirectUri: 'https://app.com/callback', state: 's1' })
+    await ml.authorizationUrl({ redirectUri: 'https://app.com/callback', state: 's1' })
 
     const token = await ml.exchangeCode('code-1', {
       redirectUri: 'https://app.com/callback',
@@ -260,7 +263,7 @@ describe('OAuthClient PKCE (RFC 7636)', () => {
     expect(token.accessToken).toBe('access-1')
     expect(spy).toHaveBeenCalledTimes(1)
     // O verifier é recuperado apenas uma vez (estado não expirado mantém o valor).
-    expect(ml.getCodeVerifier('s1')).toBeTruthy()
+    expect(await ml.getCodeVerifier('s1')).toBeTruthy()
   })
 
   it('deve aceitar codeVerifier explícito (PKCE gerenciado pelo chamador)', async () => {
@@ -303,14 +306,14 @@ describe('OAuthClient PKCE (RFC 7636)', () => {
     expect(token.accessToken).toBe('access-1')
   })
 
-  it('fallback in-memory não vaza memória: expulsa a entrada mais antiga no limite', () => {
+  it('fallback in-memory não vaza memória: expulsa a entrada mais antiga no limite', async () => {
     const ml = new OAuthClient({ clientId: 'APP_ID', clientSecret: 'SECRET', pkce: true })
     // Gera 1001 states — o limite do fallback é 1000; o primeiro é expulso.
     for (let i = 0; i < 1001; i++) {
-      ml.authorizationUrl({ redirectUri: 'https://app.com/callback', state: `s-${i}` })
+      await ml.authorizationUrl({ redirectUri: 'https://app.com/callback', state: `s-${i}` })
     }
-    expect(ml.getCodeVerifier('s-0')).toBeUndefined() // expulso (mais antigo)
-    expect(ml.getCodeVerifier('s-1000')).toBeTruthy() // presente
+    expect(await ml.getCodeVerifier('s-0')).toBeUndefined() // expulso (mais antigo)
+    expect(await ml.getCodeVerifier('s-1000')).toBeTruthy() // presente
   })
 
   it('deve expor error_description ou message do ML no OAuthError', async () => {

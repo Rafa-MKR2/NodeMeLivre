@@ -132,9 +132,13 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
   async request<T>(request: HttpClientRequest): Promise<T> {
     const method = request.method ?? 'GET'
     const url = buildUrl(this.baseUrl, request.path, request.query)
-    // A retentativa pós-refresh (401) não consome o orçamento de retry.
-    const refreshSlots = this.auth?.refresh !== undefined ? 1 : 0
-    const maxAttempts = (request.retry === false ? 1 : this.retry.maxRetries + 1) + refreshSlots
+    // O orçamento de retry é EXATAMENTE `maxRetries` (ou 1, se desativado).
+    // A retentativa pós-refresh (401) é gratuita: o `maxAttempts += 1` só
+    // acontece quando o refresh realmente ocorre. Antes, um `refreshSlots`
+    // fixo somava 1 ao orçamento de TODA requisição autenticada — o que
+    // violava `retry: false` e `maxRetries: N` (um POST não-idempotente
+    // ganhava um reenvio extra em 5xx/429) (F1, pente fino).
+    let maxAttempts = request.retry === false ? 1 : this.retry.maxRetries + 1
 
     let token: string | undefined
     if (request.auth !== false && this.auth !== undefined) {
@@ -173,6 +177,13 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
         )
       } catch (error) {
         this.logger.debug({ err: error, url: url.toString() }, 'falha de rede')
+        // Cancelamento do usuário (AbortSignal) NÃO é falha de rede: não
+        // retenta e propaga um AbortError (mesmo contrato do `paginate`) —
+        // antes, abort virava NetworkError e ainda era retentado quando o
+        // fetch rejeitava com Error simples (F2, pente fino).
+        if (request.signal?.aborted === true) {
+          throw toAbortError(request.signal, error)
+        }
         const networkError = new NetworkError('Falha ao comunicar com o Mercado Livre', error)
         this.emit('httpError', networkError, request)
         if (
@@ -205,14 +216,33 @@ export class HttpClient extends EventEmitter<HttpClientEvents> {
       this.logger.debug({ err: apiError, url: url.toString() }, 'erro da api')
       this.emit('httpError', apiError, request)
 
-      // 401 com refresh disponível: renova o token e tenta de novo uma única vez.
-      if (apiError.status === 401 && !refreshed && this.auth?.refresh !== undefined) {
-        await this.auth.refresh()
-        const fresh = await this.auth.getToken()
-        if (fresh !== undefined) {
-          headers = this.buildHeaders(request.headers, fresh)
-          refreshed = true
-          continue
+      // 401 com refresh disponível (e auth habilitado para esta requisição):
+      // renova o token e tenta de novo uma única vez. O `maxAttempts += 1`
+      // dá a essa tentativa um slot GRATUITO (não consome o orçamento de
+      // retry de status/5xx/429). Com `auth: false`, nenhum token foi anexado
+      // — um 401 não deve disparar refresh nem retentativa (F8, pente fino).
+      if (
+        apiError.status === 401 &&
+        !refreshed &&
+        request.auth !== false &&
+        this.auth?.refresh !== undefined
+      ) {
+        try {
+          await this.auth.refresh()
+          const fresh = await this.auth.getToken()
+          if (fresh !== undefined) {
+            headers = this.buildHeaders(request.headers, fresh)
+            refreshed = true
+            maxAttempts += 1
+            continue
+          }
+        } catch (error) {
+          // O refresh falhou (ex.: refresh_token rotacionado/invalidado): o
+          // erro do refresh NÃO substitui o erro tipado do 401 original — o
+          // chamador mantém status/body/requestId (contrato de erro da Rodada
+          // 3) em vez de receber um erro cru fora da hierarquia (M4, pente fino).
+          this.logger.warn({ err: error, url: url.toString() }, 'refresh do token falhou')
+          throw lastError ?? apiError
         }
       }
 
@@ -369,6 +399,23 @@ function isRedirectStatus(status: number): boolean {
   return status === 301 || status === 302 || status === 303 || status === 307 || status === 308
 }
 
+/**
+ * Erro tipado para cancelamento do usuário (F2, pente fino).
+ *
+ * Preserva o `AbortSignal.reason` quando já for um AbortError (DOMException
+ * padrão) e, nos shims de fetch que rejeitam com Error simples, devolve um
+ * `Error` com `name === 'AbortError'` — o padrão `e.name === 'AbortError'`
+ * do chamador continua funcionando (mesmo contrato do `paginate`).
+ */
+function toAbortError(signal: AbortSignal, error: unknown): Error {
+  const reason = signal.reason
+  if (reason instanceof Error && reason.name === 'AbortError') return reason
+  if (error instanceof Error && error.name === 'AbortError') return error
+  const abortError = new Error('Requisição abortada pelo usuário')
+  abortError.name = 'AbortError'
+  return abortError
+}
+
 async function parseBody(
   response: Response,
   responseType: HttpClientRequest['responseType'] = 'json',
@@ -378,20 +425,26 @@ async function parseBody(
   if (responseType === 'text') return response.text()
   const text = await response.text()
   if (text === '') return undefined
-  return tryParseJson(text) ?? text
+  const parsed = tryParseJson(text)
+  // Sentinel: `null` (JSON literal) é um corpo válido e deve chegar como
+  // `null` ao chamador — `parsed ?? text` converteria `null` em "null"
+  // (string) quebrando o contrato `T` (Rodada 9 da auditoria).
+  return parsed.failed ? text : parsed.value
 }
 
 async function tryReadBody(response: Response): Promise<unknown> {
   const text = await response.text()
   if (text === '') return undefined
-  return tryParseJson(text) ?? text
+  const parsed = tryParseJson(text)
+  return parsed.failed ? text : parsed.value
 }
 
-function tryParseJson(text: string): unknown | undefined {
+/** Resultado do parse JSON: `{ failed: true }` ou `{ failed: false, value }`. */
+function tryParseJson(text: string): { failed: boolean; value?: unknown } {
   try {
-    return JSON.parse(text) as unknown
+    return { failed: false, value: JSON.parse(text) as unknown }
   } catch {
-    return undefined
+    return { failed: true }
   }
 }
 

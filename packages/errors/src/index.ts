@@ -108,7 +108,12 @@ export class OAuthError extends MercadoLivreError {
     readonly errorDescription: string | undefined,
     options?: ErrorOptions,
   ) {
-    super(errorDescription ?? oauthError, options)
+    // A `errorDescription` vem da resposta do endpoint /oauth/token (pode
+    // ecoar dados enviados pela aplicação) — sanitiza o message para impedir
+    // log injection quando a exceção é serializada (mesmo padrão do
+    // ApiError.message — Rodada 3; este caminho ficou de fora). Os campos
+    // estruturados `oauthError`/`errorDescription` permanecem crus.
+    super(sanitizeMessage(errorDescription ?? oauthError), options)
     this.name = 'OAuthError'
   }
 }
@@ -147,7 +152,10 @@ export class InputValidationError extends MercadoLivreError {
 
 function parseRetryAfter(headers: Headers): number | undefined {
   const raw = headers.get('retry-after')
-  if (!raw) return undefined
+  // `Number('')`/`Number('  ')` = 0: um header vazio/só-espaço faria o 429
+  // ser retentado SEM backoff (mesma rajada que o código pré-Rodada 6) — exige
+  // dígitos reais (F11, pente fino).
+  if (raw === null || !/^\d+(\.\d+)?$/.test(raw.trim())) return undefined
   const seconds = Number(raw)
   return Number.isFinite(seconds) && seconds >= 0 ? seconds : undefined
 }
@@ -157,15 +165,22 @@ function parseRequestId(headers: Headers): string | undefined {
   return raw ?? undefined
 }
 
+// Quebras de linha (CR/LF, separadores Unicode) e control chars — uma
+// string atacante-controlada não pode forjar linhas de log.
+// biome-ignore lint/suspicious/noControlCharactersInRegex: control chars são o alvo (anti log-injection)
+const CONTROL_CHARS = /[\r\n\u2028\u2029\u0085\x00-\x1f\x7f]+/g
+
+/** Remove quebras de linha/control chars de uma mensagem (anti log injection). */
+function sanitizeMessage(value: string): string {
+  return value.replace(CONTROL_CHARS, ' ').trim()
+}
+
 function errorMessageFor(status: number, apiMessage: unknown): string {
   if (typeof apiMessage === 'string' && apiMessage.length > 0) {
     // A mensagem vem da resposta da API (pode ecoar input do usuário) —
     // remove quebras de linha/control chars para impedir log injection
     // quando a exceção é serializada (ex.: logs, APM).
-    const sanitized = apiMessage
-      // biome-ignore lint/suspicious/noControlCharactersInRegex: control chars são o alvo (anti log-injection)
-      .replace(/[\r\n\u2028\u2029\u0085\x00-\x1f\x7f]+/g, ' ')
-      .trim()
+    const sanitized = sanitizeMessage(apiMessage)
     // Mensagem composta só de control chars vira vazia — cai no fallback do status.
     if (sanitized.length === 0) return errorMessageFor(status, undefined)
     return sanitized

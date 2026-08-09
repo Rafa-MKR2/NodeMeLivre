@@ -5,7 +5,7 @@ import {
   OAuthClient,
   type OAuthOptions,
   type OAuthStateEntry,
-  type OAuthStateStore,
+  type OAuthStateStoreContract,
   type PkceMethod,
   TokenManager,
   type TokenManagerOptions,
@@ -53,8 +53,12 @@ export interface MercadoLivreOptions {
   baseUrl?: string
   /** Onde persistir o token. Padrão: em memória. */
   tokenStore?: TokenStore
-  /** Store de estados OAuth para proteção CSRF no fluxo de autorização. */
-  stateStore?: OAuthStateStore
+  /**
+   * Store de estados OAuth para proteção CSRF no fluxo de autorização.
+   * Qualquer implementação do contrato (in-memory, Redis, banco) — para
+   * multi-instância compartilhe o MESMO store entre as instâncias.
+   */
+  stateStore?: OAuthStateStoreContract
   /**
    * Habilita PKCE (RFC 7636) no fluxo OAuth2 — obrigatório para apps com o
    * fluxo PKCE habilitado no painel do Mercado Livre. Padrão: desabilitado.
@@ -146,12 +150,16 @@ export class MercadoLivre {
    * URL para redirecionar o vendedor ao navegador de autorização.
    * Com `stateStore` configurado, o `state` é gerado e armazenado
    * automaticamente (proteção CSRF).
+   *
+   * Assíncrona: o `state`/`code_verifier` podem ser persistidos num backing
+   * store remoto (Redis/banco) e o `await` garante que a gravação terminou
+   * antes de devolver a URL.
    */
-  authorizationUrl(
+  async authorizationUrl(
     redirectUri: string,
     state?: string,
     metadata?: Record<string, unknown>,
-  ): string {
+  ): Promise<string> {
     const options: AuthorizationUrlOptions = { redirectUri }
     if (state !== undefined) options.state = state
     if (metadata !== undefined) options.metadata = metadata
@@ -162,7 +170,7 @@ export class MercadoLivre {
    * Valida e consome o `state` recebido no callback OAuth.
    * Retorna os dados armazenados ou `null` se inválido/consumido.
    */
-  consumeState(state: string): OAuthStateEntry | null {
+  async consumeState(state: string): Promise<OAuthStateEntry | null> {
     return this.auth.consumeState(state)
   }
 

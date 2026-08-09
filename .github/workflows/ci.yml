@@ -36,8 +36,10 @@ jobs:
       - name: Testes
         run: npm run test
 
-      - name: Segurança (vetores das 7 rodadas da auditoria)
-        run: npm run security:check
+      - name: Segurança (vetores das 9 rodadas + contrato de contagem)
+        # O --expect-checks faz o job falhar se o total de checagens do
+        # security:check mudar (regressão de cobertura = CI vermelho).
+        run: npm run security:check -- --expect-checks 70
 
       - name: Build
         run: npm run build

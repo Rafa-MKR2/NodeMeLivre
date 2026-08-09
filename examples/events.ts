@@ -56,7 +56,7 @@ ml.tokens.on('tokenRefreshed', (token) => {
 
 // Uso normal — eventos disparam automaticamente
 async function main() {
-  const url = ml.authorizationUrl('http://localhost:3000/callback', 'estado-anti-csrf')
+  const url = await ml.authorizationUrl('http://localhost:3000/callback', 'estado-anti-csrf')
   console.log('Autorize em:', url)
 
   // const token = await ml.authenticate('http://localhost:3000/callback', code)

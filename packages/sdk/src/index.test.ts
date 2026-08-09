@@ -48,8 +48,8 @@ describe('MercadoLivre', () => {
     expect(() => createMercadoLivre({} as never)).toThrow(/ML_CLIENT_ID/)
   })
 
-  it('deve montar a URL de autorização com siteId', () => {
-    const url = setup().authorizationUrl('https://app.com/cb', 'state-1')
+  it('deve montar a URL de autorização com siteId', async () => {
+    const url = await setup().authorizationUrl('https://app.com/cb', 'state-1')
     expect(url).toContain('https://auth.mercadolivre.com.br/authorization')
     expect(url).toContain('client_id=APP_ID')
     expect(url).toContain('state=state-1')
