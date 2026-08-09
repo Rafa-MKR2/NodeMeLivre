@@ -1,4 +1,4 @@
-import { mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { OAuthError } from '@nodemelivre/errors'
@@ -85,6 +85,32 @@ describe('FileTokenStore', () => {
 
     await expect(stat(filePath)).rejects.toThrow()
     await expect(stat(`${filePath}.bak`)).rejects.toThrow()
+  })
+
+  it('escreve token/backup com 0600 e diretório com 0700 (segredo em disco)', async () => {
+    const filePath = join(dir, 'sub', 'token.json')
+    const store = new FileTokenStore({ filePath })
+    await store.set(token({ accessToken: 'segredo' }))
+
+    const mode = (p: string) => stat(p).then((s) => s.mode & 0o777)
+    await expect(mode(filePath)).resolves.toBe(0o600)
+    await expect(mode(`${filePath}.bak`)).resolves.toBe(0o600)
+    await expect(mode(join(dir, 'sub'))).resolves.toBe(0o700)
+  })
+
+  it('re-permissiona backup pré-existente com permissão frouxa (0644 → 0600)', async () => {
+    const filePath = join(dir, 'token.json')
+    const store = new FileTokenStore({ filePath })
+    await store.set(token({ accessToken: 'primeiro' }))
+
+    // Simula um backup legado com permissão frouxa (como se criado antes do
+    // hardening): a próxima escrita re-permissiona para 0600.
+    await chmod(`${filePath}.bak`, 0o644)
+
+    await store.set(token({ accessToken: 'segundo' }))
+
+    const mode = (await stat(`${filePath}.bak`)).mode & 0o777
+    expect(mode).toBe(0o600)
   })
 
   it('get() com principal corrompido serve o backup SEM reescrever o principal (O1)', async () => {

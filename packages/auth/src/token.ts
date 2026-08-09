@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { FileHandle } from 'node:fs/promises'
-import { constants, mkdir, open, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, constants, mkdir, open, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { OAuthError } from '@nodemelivre/errors'
 
@@ -482,14 +482,24 @@ export class FileTokenStore implements TokenStore {
 
   /** Escreve token versionado atomicamente (temp + rename). */
   private async writeVersionedUnlocked(versioned: VersionedToken): Promise<void> {
-    await mkdir(dirname(this.filePath), { recursive: true })
+    const dir = dirname(this.filePath)
+    await mkdir(dir, { recursive: true, mode: 0o700 })
+    // O diretório pode já existir com permissão frouxa (ex.: 0755 criado por
+    // versões anteriores) — garante 0700: outro usuário não pode listar/navegar.
+    await chmod(dir, 0o700).catch(() => undefined)
     const tempPath = `${this.filePath}.tmp`
     const json = JSON.stringify(versioned, null, 2)
     await writeFile(tempPath, json, { encoding: 'utf8', mode: 0o600 })
     // Atomic rename (POSIX e Windows)
     await import('node:fs/promises').then((fs) => fs.rename(tempPath, this.filePath))
-    // Cria backup para recuperação de corrupção
+    // O rename preserva o modo do temp (0600); reforça mesmo assim caso o
+    // destino já exista com permissão herdada diferente (ex.: 0644 antigo).
+    await chmod(this.filePath, 0o600).catch(() => undefined)
+    // Cria backup para recuperação de corrupção. `mode` do writeFile só vale
+    // na CRIAÇÃO — um backup pré-existente com 0644 não seria re-permissionado
+    // sem o chmod explícito (regressão silenciosa de vazamento).
     await writeFile(this.backupPath, json, { encoding: 'utf8', mode: 0o600 })
+    await chmod(this.backupPath, 0o600).catch(() => undefined)
   }
 
   /**

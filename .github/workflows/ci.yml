@@ -27,6 +27,11 @@ jobs:
       - name: Auditoria de dependências (npm audit)
         run: npm audit --omit=dev --audit-level=high
 
+      - name: Geração de SBOM (CycloneDX)
+        # Falha se o npm sbom não gerar — o BOM passa a ser artefato verificável
+        # (transparência de supply chain + entrada para scanners/vuln correlation).
+        run: npm sbom --sbom-format=cyclonedx > /tmp/nodemelivre-sbom.json && test -s /tmp/nodemelivre-sbom.json
+
       - name: Lint
         run: npm run lint
 
@@ -39,7 +44,7 @@ jobs:
       - name: Segurança (vetores das 9 rodadas + contrato de contagem)
         # O --expect-checks faz o job falhar se o total de checagens do
         # security:check mudar (regressão de cobertura = CI vermelho).
-        run: npm run security:check -- --expect-checks 70
+        run: npm run security:check -- --expect-checks 76
 
       - name: Build
         run: npm run build

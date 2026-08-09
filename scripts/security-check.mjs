@@ -41,7 +41,7 @@
  *
  * Uso:
  *   npm run security:check                              # estático + dinâmico + fuzzing
- *   npm run security:check -- --expect-checks 57        # + contrato de contagem (CI)
+ *   npm run security:check -- --expect-checks 76        # + contrato de contagem (CI)
  *   npm run security:static                             # apenas estático (dev, mais rápido)
  *
  * FUZZ_SEEDS (fora do CI) — roda os fuzzers com seeds ROTATIVAS para
@@ -876,6 +876,88 @@ console.log('Estágio 1 — varredura estática (padrões proibidos)\n')
   )
 }
 
+// 43. Lockfile presente, versionado e íntegro (supply chain) — `npm ci` só é
+//     reproduzível com um package-lock.json em lockfileVersion 3 (não o
+//     antigo v1 sem integrity hashes). Remover o lockfile = builds
+//     não-reproduzíveis (supply chain flutuante).
+{
+  const lock = join(ROOT, 'package-lock.json')
+  let ok = false
+  let detail = 'package-lock.json ausente'
+  try {
+    const lockContent = readFileSync(lock, 'utf8')
+    const parsed = JSON.parse(lockContent)
+    ok = parsed.lockfileVersion === 3
+    detail = ok ? '' : 'lockfileVersion ≠ 3 (migre com npm install)'
+  } catch (error) {
+    detail = `package-lock.json inválido: ${error instanceof Error ? error.message : String(error)}`
+  }
+  report('package-lock.json presente e em lockfileVersion 3 (supply chain)', ok, detail)
+}
+
+// 44. CI usa `npm ci` (não `npm install`) — reproduzibilidade exata do
+//     lockfile. `npm install` pode resolver/atualizar dependências de forma
+//     silenciosa (ou escrever o lockfile) → build não-reproduzível.
+{
+  const ci = join(ROOT, '.github', 'workflows', 'ci.yml')
+  const publish = join(ROOT, '.github', 'workflows', 'publish-beta.yml')
+  const ciContent = readFileSync(ci, 'utf8')
+  const publishContent = readFileSync(publish, 'utf8')
+  report(
+    'ci.yml/publish-beta.yml usam npm ci (não npm install) (supply chain)',
+    ciContent.includes('run: npm ci') &&
+      publishContent.includes('run: npm ci') &&
+      !ciContent.includes('run: npm install') &&
+      !publishContent.includes('run: npm install'),
+  )
+}
+
+// 45. SBOM gerado no CI (supply chain) — o CycloneDX BOM é artefato
+//     verificável de composição de dependências (entrada para scanners de
+//     vulnerabilidade e correlação de CVEs). Remover o passo = supply chain
+//     sem transparência.
+{
+  const ci = join(ROOT, '.github', 'workflows', 'ci.yml')
+  const publish = join(ROOT, '.github', 'workflows', 'publish-beta.yml')
+  const ciContent = readFileSync(ci, 'utf8')
+  const publishContent = readFileSync(publish, 'utf8')
+  report(
+    'ci.yml/publish-beta.yml geram SBOM CycloneDX (supply chain)',
+    ciContent.includes('npm sbom') && publishContent.includes('npm sbom'),
+  )
+}
+
+// 46. npm audit no CI com limite explícito (supply chain) — `--audit-level`
+//     define o piso de severidade que bloqueia o build; sem o nível, um
+//     upgrade da CLI muda o default silenciosamente.
+{
+  const ci = join(ROOT, '.github', 'workflows', 'ci.yml')
+  const publish = join(ROOT, '.github', 'workflows', 'publish-beta.yml')
+  const ciContent = readFileSync(ci, 'utf8')
+  const publishContent = readFileSync(publish, 'utf8')
+  report(
+    'npm audit com --audit-level explícito no CI (supply chain)',
+    ciContent.includes('npm audit --omit=dev --audit-level=high') &&
+      publishContent.includes('npm audit --omit=dev --audit-level=high'),
+  )
+}
+
+// 47. Fuzzer do HttpClient PRESENTE em client-fuzz.test.ts (Rodada 10+) —
+//     mesmo papel dos itens 36-38/41-42 para o Estágio 8: o caminho HTTP
+//     REAL (redirect hostil, orçamento de retry, retry-after corrompido,
+//     bodies hostis, clone O4) não pode perder o fuzzer próprio — a presença
+//     no --static-only garante que a remoção/renomeação derruba o CI.
+{
+  const httpFuzzTest = join(SRC, 'http', 'src', 'client-fuzz.test.ts')
+  const content = readFileSync(httpFuzzTest, 'utf8')
+  report(
+    'fuzzer do HttpClient presente em client-fuzz.test.ts (Rodada 10+)',
+    content.includes("describe('HttpClient — fuzzing") &&
+      content.includes('forEachFuzzSeed') &&
+      content.includes('MAX_REDIRECTS'),
+  )
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // DINÂMICO — executa os testes que cobrem cada vetor
 // ────────────────────────────────────────────────────────────────────────────
@@ -1147,6 +1229,47 @@ if (!staticOnly) {
   if (!rlFuzzOk) {
     process.stdout.write(rlFuzzResult.stdout)
     process.stderr.write(rlFuzzResult.stderr)
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// ESTÁGIO 8 — FUZZING determinístico do caminho HTTP REAL (Rodada 10+)
+// ────────────────────────────────────────────────────────────────────────────
+
+if (!staticOnly) {
+  console.log('\nEstágio 8 — fuzzing determinístico do HttpClient\n')
+
+  // O fuzzer vive no describe 'HttpClient — fuzzing' de client-fuzz.test.ts
+  // (PRNG mulberry32 com seed fixa). Exercita o `HttpClient.request` por
+  // inteiro com um fetch HOSTIL: cadeias aleatórias de redirects (Location
+  // oficiais/maliciosos/downgrade/lixo), status de retry, retry-after
+  // corrompido e bodies malformados. Invariantes: o Authorization NUNCA
+  // chega a um origin ≠ do baseUrl (nem via redirect cross-origin); nunca
+  // mais que MAX_REDIRECTS+1 fetches (anti-loop); sem downgrade https→http;
+  // orçamento de retry exato (nunca mais que maxRetries+1 tentativas);
+  // retry-after corrompido nunca dorme além de MAX_WAIT_MS; corpos hostis
+  // nunca lançam erro nativo de parse. Estágio PRÓPRIO — com o mesmo cuidado
+  // dos Estágios 3-7: o exit code do vitest NÃO basta (filtro sem
+  // correspondência sai 0 com tudo skipped) — a checagem parseia "Tests N
+  // passed" e exige N >= 1.
+  const httpFuzzFile = join('packages', 'http', 'src', 'client-fuzz.test.ts')
+  const httpFuzzResult = spawnSync(
+    'npx',
+    ['vitest', 'run', '--silent=true', httpFuzzFile, '-t', 'fuzzing'],
+    { cwd: ROOT, encoding: 'utf8' },
+  )
+  const httpFuzzPassed = Number(/Tests\s+(\d+) passed/i.exec(httpFuzzResult.stdout)?.[1] ?? 0)
+  const httpFuzzOk = httpFuzzResult.status === 0 && httpFuzzPassed >= 1
+  report(
+    'fuzzer do HttpClient rodou (redirect hostil, retry exato, retry-after, bodies hostis, clone O4)',
+    httpFuzzOk,
+    httpFuzzOk
+      ? `${httpFuzzPassed} testes determinísticos passaram`
+      : 'vitest falhou ou não executou o fuzzer — veja acima',
+  )
+  if (!httpFuzzOk) {
+    process.stdout.write(httpFuzzResult.stdout)
+    process.stderr.write(httpFuzzResult.stderr)
   }
 }
 
