@@ -1,4 +1,5 @@
 import { assertValidId, type ResourceTransport, toQuery } from '@nodemelivre/core'
+import { InputValidationError } from '@nodemelivre/errors'
 import type { Shipment, ShipmentLabelFormat } from '@nodemelivre/types'
 
 /** Opções da impressão de etiqueta. */
@@ -26,6 +27,11 @@ export class Shipments {
     options: PrintLabelOptions = {},
   ): Promise<ArrayBuffer> {
     const ids = Array.isArray(shipmentIds) ? shipmentIds : [shipmentIds]
+    // Array vazio é bug do chamador: sem o guard, iria à API com
+    // `shipment_ids: ''` e falharia com erro confuso (fail fast).
+    if (ids.length === 0) {
+      throw new InputValidationError('informe ao menos um shipment_id para gerar a etiqueta')
+    }
     for (const id of ids) {
       assertValidId(id, 'shipment_id')
     }

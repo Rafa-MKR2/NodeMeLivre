@@ -52,8 +52,8 @@ describe('Items', () => {
     const transport = fakeTransport(() => item)
     await new Items(transport).updateStatus('MLB1', 'closed')
     expect(transport.calls[0]).toMatchObject({
-      method: 'POST',
-      path: '/items/MLB1/status',
+      method: 'PUT',
+      path: '/items/MLB1',
       body: { status: 'closed' },
     })
   })
@@ -247,8 +247,8 @@ describe('Items', () => {
     const transport = fakeTransport(() => ({ ...item, status: 'active' }))
     await new Items(transport).publish('MLB1')
     expect(transport.calls[0]).toMatchObject({
-      method: 'POST',
-      path: '/items/MLB1/status',
+      method: 'PUT',
+      path: '/items/MLB1',
       body: { status: 'active' },
     })
   })
@@ -257,8 +257,8 @@ describe('Items', () => {
     const transport = fakeTransport(() => ({ ...item, status: 'paused' }))
     await new Items(transport).pause('MLB1')
     expect(transport.calls[0]).toMatchObject({
-      method: 'POST',
-      path: '/items/MLB1/status',
+      method: 'PUT',
+      path: '/items/MLB1',
       body: { status: 'paused' },
     })
   })
@@ -281,8 +281,8 @@ describe('Items', () => {
 
     expect(transport.calls).toHaveLength(2)
     expect(transport.calls[1]).toMatchObject({
-      method: 'POST',
-      path: '/items/MLB1/status',
+      method: 'PUT',
+      path: '/items/MLB1',
       body: { status: 'active' },
     })
   })

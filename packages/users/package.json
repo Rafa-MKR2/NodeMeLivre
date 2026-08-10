@@ -1,7 +1,7 @@
 {
   "name": "@nodemelivre/users",
   "version": "1.0.0-beta.1",
-  "description": "Recursos de usu\u00e1rios do NodeMeLivre para a API do Mercado Livre",
+  "description": "Recursos de usuários do NodeMeLivre para a API do Mercado Livre",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -23,8 +23,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@nodemelivre/core": "^1.0.0-beta.1",
-    "@nodemelivre/types": "^1.0.0-beta.1"
+    "@nodemelivre/core": "workspace:*",
+    "@nodemelivre/errors": "workspace:*",
+    "@nodemelivre/types": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0"

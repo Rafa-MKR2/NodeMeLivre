@@ -55,10 +55,17 @@ export class Items {
     return this.transport.put(`/items/${itemId}/description`, { plain_text: text })
   }
 
-  /** Altera o status do anúncio (ex.: fechar, pausar). */
+  /**
+   * Altera o status do anúncio (ex.: fechar, pausar).
+   *
+   * O ML não tem o endpoint `POST /items/{id}/status` (responde 404
+   * "Resource .../status not found") — a mudança de status é um PUT parcial
+   * em `/items/{id}` com o campo `status` no corpo (documentação oficial
+   * "modificar ítem").
+   */
   updateStatus(itemId: string, status: ItemStatus): Promise<Item> {
     assertValidId(itemId, 'item_id')
-    return this.transport.post(`/items/${itemId}/status`, { status })
+    return this.transport.put(`/items/${itemId}`, { status })
   }
 
   /** Busca de itens por site. */

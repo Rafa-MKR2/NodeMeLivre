@@ -109,22 +109,35 @@ export class Questions {
     return this.transport.get(`/questions/${questionId}`)
   }
 
-  /** Responde uma pergunta pendente. */
-  answer(input: QuestionAnswerInput): Promise<QuestionAnswer> {
-    assertValid(questionAnswerSchema, input)
-    return this.transport.post('/answers', {
-      question_id: input.questionId,
-      text: input.text,
-    })
-  }
-
-  /** Responde uma pergunta e a marca como respondida (alias de `answer`). */
+  /**
+   * Responde uma pergunta e a marca como respondida — **API canônica**.
+   *
+   * ```ts
+   * await ml.questions.reply(questionId, 'Sim, temos em estoque!')
+   * ```
+   */
   reply(questionId: number | string, text: string): Promise<QuestionAnswer> {
     assertValidId(questionId, 'question_id')
     const numericId = Number(questionId)
     if (!Number.isSafeInteger(numericId) || numericId <= 0) {
       throw new InputValidationError('question_id deve ser um número positivo')
     }
-    return this.answer({ questionId: numericId, text })
+    const input: QuestionAnswerInput = { questionId: numericId, text }
+    assertValid(questionAnswerSchema, input)
+    return this.transport.post('/answers', {
+      question_id: numericId,
+      text,
+    })
+  }
+
+  /**
+   * Responde uma pergunta pendente.
+   *
+   * @deprecated Use `reply(questionId, text)` — a assinatura com objeto é
+   * redundante e confunde o autocomplete. Mantida por compatibilidade:
+   * mesma validação e mesmo endpoint de `reply` (delega internamente).
+   */
+  answer(input: QuestionAnswerInput): Promise<QuestionAnswer> {
+    return this.reply(input.questionId, input.text)
   }
 }

@@ -36,7 +36,7 @@ async function main(): Promise<void> {
     console.log(`- ${item.title} (${item.currency_id} ${item.price})`)
   }
 
-  const answered = await ml.questions.answer({ questionId: 123, text: 'Sim, temos!' })
+  const answered = await ml.questions.reply(123, 'Sim, temos!')
   console.log(`Resposta enviada: ${answered.text} (${answered.status})`)
 }
 

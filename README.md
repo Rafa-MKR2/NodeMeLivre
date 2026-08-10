@@ -125,6 +125,16 @@ const pdf = await ml.shipments.printLabel(shipmentId, { format: 'pdf' })
 await writeFile('etiqueta.pdf', Buffer.from(pdf))
 ```
 
+> **Anúncios no modelo "User Product" (`family_name`):** contas nesse modelo
+> exigem `family_name` na criação (o ML gera o `title` publicável a partir
+> dele e rejeita `title` com o erro 369/374). Atenção: **`title` e
+> `family_name` são read-only após a criação** — um `PUT /items/{id}` com
+> qualquer um dos dois num item existente retorna `400 BODY_INVALID_FIELDS`
+> (cause 374, "The field family name is invalid"). Para alterar preço/estoque,
+> envie **apenas os campos mutáveis** via `ml.items.update(id, { price,
+> available_quantity })` — comportamento validado em produção no painel de
+> teste NodeMeLivre.
+
 ---
 
 ## Deploy multi-instância: PKCE + stateStore compartilhado
@@ -215,7 +225,7 @@ const url = await mlA.authorizationUrl('https://seusite.com/callback')
 | Recurso | O que faz |
 |---------|-----------|
 | **Auth** | OAuth2 completo — `authorization_code`, `refresh_token`, `credentials`. Refresh automático, dedupe, token store pluggável (memória ou arquivo). |
-| **Items** | CRUD, busca, **paginação automática** (`for await` com `AbortSignal`), **createAndPublish** (cria + garante ativo), `publish`/`pause`, `list`/`listBySeller`. |
+| **Items** | CRUD, busca, **paginação automática** (`for await` com `AbortSignal`), **createAndPublish** (cria + garante ativo), `update` (PUT parcial — status via `updateStatus`, preço, estoque), `publish`/`pause`, `list`/`listBySeller`. Ver nota sobre o modelo User Product (`family_name` read-only) abaixo do fluxo. |
 | **Orders** | Busca, detalhes, **waitUntilPaid** (polling com timeout e `AbortSignal`). |
 | **Shipments** | Rastreio, **printLabel** (PDF/ZPL → `ArrayBuffer`). |
 | **Questions** | Busca, `answer`, `reply` (responde + marca respondida). |

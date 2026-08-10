@@ -62,7 +62,7 @@ describe('Integração nível 3 — fluxos compostos reais', () => {
       server.route('POST', '/items', () => ({
         json: { id: 'MLB1', status: 'under_review', title: 'Produto' },
       }))
-      server.route('POST', '/items/MLB1/status', () => ({
+      server.route('PUT', '/items/MLB1', () => ({
         json: { id: 'MLB1', status: 'active', title: 'Produto' },
       }))
 
@@ -74,10 +74,11 @@ describe('Integração nível 3 — fluxos compostos reais', () => {
 
       expect(item.status).toBe('active')
       const posts = server.requests.filter((r) => r.method === 'POST')
-      expect(posts).toHaveLength(2)
+      expect(posts).toHaveLength(1)
       expect(posts[0]?.path).toBe('/items')
-      expect(posts[1]?.path).toBe('/items/MLB1/status')
-      expect(posts[1]?.body).toEqual({ status: 'active' })
+      const put = server.requests.find((r) => r.method === 'PUT')
+      expect(put?.path).toBe('/items/MLB1')
+      expect(put?.body).toEqual({ status: 'active' })
     })
 
     it('rejeita input inválido antes de chamar a API (fail fast)', async () => {

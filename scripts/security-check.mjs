@@ -880,19 +880,46 @@ console.log('Estágio 1 — varredura estática (padrões proibidos)\n')
 //     reproduzível com um package-lock.json em lockfileVersion 3 (não o
 //     antigo v1 sem integrity hashes). Remover o lockfile = builds
 //     não-reproduzíveis (supply chain flutuante).
+//     Contexto pnpm (SDK vendorizado em workspace): o artefato equivalente é
+//     o pnpm-lock.yaml na raiz do workspace (ROOT ou um ancestral) — o rsync
+//     do vendoring exclui o package-lock.json de propósito (o install do
+//     workspace é governado pelo pnpm-lock.yaml).
 {
   const lock = join(ROOT, 'package-lock.json')
   let ok = false
-  let detail = 'package-lock.json ausente'
+  let detail = 'package-lock.json ausente e pnpm-lock.yaml não encontrado'
   try {
     const lockContent = readFileSync(lock, 'utf8')
     const parsed = JSON.parse(lockContent)
     ok = parsed.lockfileVersion === 3
-    detail = ok ? '' : 'lockfileVersion ≠ 3 (migre com npm install)'
+    detail = ok ? 'package-lock.json (lockfileVersion 3)' : 'lockfileVersion ≠ 3 (migre com npm install)'
   } catch (error) {
-    detail = `package-lock.json inválido: ${error instanceof Error ? error.message : String(error)}`
+    // Sem package-lock.json válido (contexto npm) — procura o lock do
+    // workspace pnpm em ROOT e ancestrais (cobre o SDK vendorizado). Exige
+    // package.json no mesmo diretório (limite real de workspace) e lock
+    // não-vazio — um pnpm-lock.yaml órfão num ancestral distante não conta.
+    let dir = ROOT
+    while (!ok) {
+      const lockPath = join(dir, 'pnpm-lock.yaml')
+      const hasLock = Boolean(statSync(lockPath, { throwIfNoEntry: false }))
+      const hasManifest = Boolean(statSync(join(dir, 'package.json'), { throwIfNoEntry: false }))
+      if (hasLock && hasManifest) {
+        const content = readFileSync(lockPath, 'utf8')
+        ok = content.trim().length > 0
+        detail = ok
+          ? `pnpm-lock.yaml em ${dir === ROOT ? 'ROOT' : relative(ROOT, dir)} (workspace pnpm)`
+          : `pnpm-lock.yaml em ${dir === ROOT ? 'ROOT' : relative(ROOT, dir)} está vazio`
+        if (ok) break
+      }
+      const parent = dirname(dir)
+      if (parent === dir) break
+      dir = parent
+    }
+    if (!ok) {
+      detail = `package-lock.json inválido: ${error instanceof Error ? error.message : String(error)}`
+    }
   }
-  report('package-lock.json presente e em lockfileVersion 3 (supply chain)', ok, detail)
+  report('lockfile presente e íntegro (package-lock v3 ou pnpm-lock) (supply chain)', ok, detail)
 }
 
 // 44. CI usa `npm ci` (não `npm install`) — reproduzibilidade exata do
@@ -1292,4 +1319,4 @@ if (expectChecks !== undefined && expectChecks !== checks) {
   )
   process.exit(1)
 }
-console.log('✅ security:check — todos os vetores das 9 rodadas verificados')
+console.log('✅ security:check — todos os vetores das 10 rodadas verificados')
