@@ -1,7 +1,7 @@
 {
   "name": "@nodemelivre/messages",
   "version": "1.0.0",
-  "description": "Recursos de mensagens (chat p\u00f3s-venda) do NodeMeLivre para a API do Mercado Livre",
+  "description": "Recursos de mensagens (chat pós-venda) do NodeMeLivre para a API do Mercado Livre",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -23,14 +23,15 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@nodemelivre/core": "^1.0.0-beta.1",
-    "@nodemelivre/errors": "^1.0.0-beta.1",
-    "@nodemelivre/types": "^1.0.0-beta.1"
+    "@nodemelivre/core": "^1.0.0",
+    "@nodemelivre/errors": "^1.0.0",
+    "@nodemelivre/types": "^1.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com/"
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   }
 }

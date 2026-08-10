@@ -1,4 +1,4 @@
-name: Publish to GitHub Packages
+name: Publish to npm
 
 on:
   push:
@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
   build-and-publish:
@@ -16,7 +15,6 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: read
-      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
@@ -25,8 +23,7 @@ jobs:
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: '22'
-          registry-url: 'https://npm.pkg.github.com/'
-          scope: '@nodemelivre'
+          registry-url: 'https://registry.npmjs.org/'
 
       - name: Install dependencies
         run: npm ci
@@ -51,7 +48,7 @@ jobs:
         # security:check mudar (regressão de cobertura = publish bloqueado).
         run: npm run security:check -- --expect-checks 76
 
-      - name: Publish to GitHub Packages
+      - name: Publish to npm
         run: |
           # Tag beta (v1.0.0-beta.*) → dist-tag beta; tag estável (v1.0.*) → latest
           if [[ "$GITHUB_REF_NAME" == *-beta* ]]; then
@@ -64,11 +61,12 @@ jobs:
           for pkg in packages/*/; do
             name=$(basename "$pkg")
             echo "Publishing @nodemelivre/$name..."
-            if npm publish "$pkg" $TAG_FLAG --access restricted 2>&1 | grep -q "already exists"; then
+            # publishConfig já traz registry npmjs + access public (scoped)
+            if npm publish "$pkg" $TAG_FLAG 2>&1 | grep -q "already exists"; then
               echo "  → @nodemelivre/$name já existe, pulando"
             else
               echo "  → @nodemelivre/$name publicado"
             fi
           done
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

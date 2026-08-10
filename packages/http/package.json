@@ -23,13 +23,14 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@nodemelivre/core": "^1.0.0-beta.1",
-    "@nodemelivre/errors": "^1.0.0-beta.1"
+    "@nodemelivre/core": "^1.0.0",
+    "@nodemelivre/errors": "^1.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com/"
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   }
 }

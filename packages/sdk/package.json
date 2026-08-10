@@ -23,24 +23,25 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@nodemelivre/auth": "^1.0.0-beta.1",
-    "@nodemelivre/core": "^1.0.0-beta.1",
-    "@nodemelivre/errors": "^1.0.0-beta.1",
-    "@nodemelivre/http": "^1.0.0-beta.1",
-    "@nodemelivre/images": "^1.0.0-beta.1",
-    "@nodemelivre/items": "^1.0.0-beta.1",
-    "@nodemelivre/messages": "^1.0.0-beta.1",
-    "@nodemelivre/orders": "^1.0.0-beta.1",
-    "@nodemelivre/questions": "^1.0.0-beta.1",
-    "@nodemelivre/shipments": "^1.0.0-beta.1",
-    "@nodemelivre/types": "^1.0.0-beta.1",
-    "@nodemelivre/users": "^1.0.0-beta.1",
-    "@nodemelivre/webhooks": "^1.0.0-beta.1"
+    "@nodemelivre/auth": "^1.0.0",
+    "@nodemelivre/core": "^1.0.0",
+    "@nodemelivre/errors": "^1.0.0",
+    "@nodemelivre/http": "^1.0.0",
+    "@nodemelivre/images": "^1.0.0",
+    "@nodemelivre/items": "^1.0.0",
+    "@nodemelivre/messages": "^1.0.0",
+    "@nodemelivre/orders": "^1.0.0",
+    "@nodemelivre/questions": "^1.0.0",
+    "@nodemelivre/shipments": "^1.0.0",
+    "@nodemelivre/types": "^1.0.0",
+    "@nodemelivre/users": "^1.0.0",
+    "@nodemelivre/webhooks": "^1.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com/"
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   }
 }
