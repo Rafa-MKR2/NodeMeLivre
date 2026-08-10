@@ -105,6 +105,17 @@ function stripComments(content) {
     .join('\n')
 }
 
+/**
+ * Extrai "Tests N passed" do resumo do vitest — tolerante a ANSI escape
+ * codes. O runner do GitHub Actions força cores (FORCE_COLOR/CI), e os
+ * códigos entre 'Tests' e o número quebravam o regex → os 6 estágios de
+ * fuzzing falhavam no CI (falso negativo) embora o vitest passasse.
+ */
+function countPassedTests(stdout) {
+  const plain = stdout.replace(/\x1b\[[0-9;]*m/g, '')
+  return Number(/Tests\s+(\d+) passed/i.exec(plain)?.[1] ?? 0)
+}
+
 console.log('🔒 security:check — vetores das 9 rodadas da auditoria\n')
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -1095,7 +1106,7 @@ if (!staticOnly) {
     ['vitest', 'run', '--silent=true', fuzzFile, '-t', 'fuzzing'],
     { cwd: ROOT, encoding: 'utf8' },
   )
-  const fuzzPassed = Number(/Tests\s+(\d+) passed/i.exec(fuzzResult.stdout)?.[1] ?? 0)
+  const fuzzPassed = countPassedTests(fuzzResult.stdout)
   const fuzzOk = fuzzResult.status === 0 && fuzzPassed >= 1
   report(
     'fuzzer deepOmitEmpty rodou (ciclos, DAGs, __proto__, profundidade)',
@@ -1134,7 +1145,7 @@ if (!staticOnly) {
     ['vitest', 'run', '--silent=true', loggerFuzzFile, '-t', 'fuzzing'],
     { cwd: ROOT, encoding: 'utf8' },
   )
-  const loggerFuzzPassed = Number(/Tests\s+(\d+) passed/i.exec(loggerFuzzResult.stdout)?.[1] ?? 0)
+  const loggerFuzzPassed = countPassedTests(loggerFuzzResult.stdout)
   const loggerFuzzOk = loggerFuzzResult.status === 0 && loggerFuzzPassed >= 1
   report(
     'fuzzer do logger rodou (ciclos, getters que lançam, símbolos, BigInt)',
@@ -1173,7 +1184,7 @@ if (!staticOnly) {
     ['vitest', 'run', '--silent=true', urlFuzzFile, '-t', 'fuzzing'],
     { cwd: ROOT, encoding: 'utf8' },
   )
-  const urlFuzzPassed = Number(/Tests\s+(\d+) passed/i.exec(urlFuzzResult.stdout)?.[1] ?? 0)
+  const urlFuzzPassed = countPassedTests(urlFuzzResult.stdout)
   const urlFuzzOk = urlFuzzResult.status === 0 && urlFuzzPassed >= 1
   report(
     'fuzzer do buildUrl rodou (URLs malformadas, CRLF, protocolos exóticos, controle)',
@@ -1209,7 +1220,7 @@ if (!staticOnly) {
     ['vitest', 'run', '--silent=true', pagFuzzFile, '-t', 'fuzzing'],
     { cwd: ROOT, encoding: 'utf8' },
   )
-  const pagFuzzPassed = Number(/Tests\s+(\d+) passed/i.exec(pagFuzzResult.stdout)?.[1] ?? 0)
+  const pagFuzzPassed = countPassedTests(pagFuzzResult.stdout)
   const pagFuzzOk = pagFuzzResult.status === 0 && pagFuzzPassed >= 1
   report(
     'fuzzer do paginate rodou (loop infinito, páginas que não avançam, entrega exata)',
@@ -1244,7 +1255,7 @@ if (!staticOnly) {
     ['vitest', 'run', '--silent=true', rlFuzzFile, '-t', 'fuzzing'],
     { cwd: ROOT, encoding: 'utf8' },
   )
-  const rlFuzzPassed = Number(/Tests\s+(\d+) passed/i.exec(rlFuzzResult.stdout)?.[1] ?? 0)
+  const rlFuzzPassed = countPassedTests(rlFuzzResult.stdout)
   const rlFuzzOk = rlFuzzResult.status === 0 && rlFuzzPassed >= 1
   report(
     'fuzzer do RateLimiter rodou (espera nunca > MAX_WAIT_MS, single-flight)',
@@ -1285,7 +1296,7 @@ if (!staticOnly) {
     ['vitest', 'run', '--silent=true', httpFuzzFile, '-t', 'fuzzing'],
     { cwd: ROOT, encoding: 'utf8' },
   )
-  const httpFuzzPassed = Number(/Tests\s+(\d+) passed/i.exec(httpFuzzResult.stdout)?.[1] ?? 0)
+  const httpFuzzPassed = countPassedTests(httpFuzzResult.stdout)
   const httpFuzzOk = httpFuzzResult.status === 0 && httpFuzzPassed >= 1
   report(
     'fuzzer do HttpClient rodou (redirect hostil, retry exato, retry-after, bodies hostis, clone O4)',
