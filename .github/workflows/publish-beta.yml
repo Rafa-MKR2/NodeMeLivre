@@ -7,6 +7,7 @@ on:
       - 'v1.0.*'          # releases estáveis → dist-tag latest
 
 permissions:
+  id-token: write   # OIDC — Trusted Publishing (npm publica sem NPM_TOKEN)
   contents: read
 
 jobs:
@@ -14,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
+      id-token: write
       contents: read
     steps:
       - name: Checkout
@@ -43,14 +45,15 @@ jobs:
       - name: Geração de SBOM (CycloneDX)
         run: npm sbom --sbom-format=cyclonedx > /tmp/nodemelivre-sbom.json && test -s /tmp/nodemelivre-sbom.json
 
-      - name: Segurança (vetores das 9 rodadas + contrato de contagem)
+      - name: Segurança (vetores das 10 rodadas + contrato de contagem)
         # O --expect-checks faz o job falhar se o total de checagens do
         # security:check mudar (regressão de cobertura = publish bloqueado).
         run: npm run security:check -- --expect-checks 76
 
-      - name: Publish to npm
+      - name: Publish to npm (Trusted Publishing / OIDC)
         run: |
           # Tag beta (v1.0.0-beta.*) → dist-tag beta; tag estável (v1.0.*) → latest
+          # Sem NPM_TOKEN: o npm troca o OIDC (id-token) por um token curto.
           if [[ "$GITHUB_REF_NAME" == *-beta* ]]; then
             TAG_FLAG="--tag beta"
             echo "Release $GITHUB_REF_NAME → dist-tag beta"
@@ -62,11 +65,13 @@ jobs:
             name=$(basename "$pkg")
             echo "Publishing @nodemelivre/$name..."
             # publishConfig já traz registry npmjs + access public (scoped)
-            if npm publish "$pkg" $TAG_FLAG 2>&1 | grep -q "already exists"; then
+            if (cd "$pkg" && npm publish $TAG_FLAG) > /tmp/publish-$name.log 2>&1; then
+              echo "  → @nodemelivre/$name publicado"
+            elif grep -q "already exists" /tmp/publish-$name.log; then
               echo "  → @nodemelivre/$name já existe, pulando"
             else
-              echo "  → @nodemelivre/$name publicado"
+              echo "  → @nodemelivre/$name FALHOU (veja o log)"
+              tail -3 /tmp/publish-$name.log
+              exit 1
             fi
           done
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

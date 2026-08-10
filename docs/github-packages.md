@@ -4,8 +4,8 @@
 
 Os pacotes `@nodemelivre/*` são publicados no **npm público** (`registry.npmjs.org`)
 desde o release **v1.0.0** (2026-08-10) — **sem necessidade de token para instalar**.
-Publicação automática via GitHub Actions: tag `v1.0.0-beta.*` → dist-tag `beta`;
-tag `v1.0.*` → dist-tag `latest` (release estável).
+Publicação automática via GitHub Actions com **Trusted Publishing (OIDC)**:
+tag `v1.0.0-beta.*` → dist-tag `beta`; tag `v1.0.*` → dist-tag `latest` (release estável).
 
 > **Histórico:** o v1.0.0-beta.* foi publicado no GitHub Packages (`npm.pkg.github.com`,
 > restricted) até o release estável. A partir do v1.0.0 o registry canônico é o **npmjs público**.
@@ -59,10 +59,19 @@ bash ./setup-github-packages.sh        # sem token: valida o acesso público
 4. `npm audit` + SBOM CycloneDX + `security:check` (76/76)
 5. Publica os 14 pacotes `@nodemelivre/*` (dist-tag `beta` ou `latest` conforme a tag;
    `publishConfig.access: public`)
-6. Pula versões já existentes (não falha)
+6. Pula versões já existentes; **falha** se um publish quebrar por outro motivo
 
-> **Requisito de credencial:** o workflow usa `NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}`
-> (token de publicação do npmjs, escopo da org `nodemelivre`).
+> **Credencial — Trusted Publishing (OIDC):** o workflow usa `id-token: write` e
+> **não armazena `NPM_TOKEN`** — o npm troca o OIDC do GitHub Actions por um token
+> curto por job (política 2026: tokens com bypass 2FA foram restringidos para
+> publicação direta; OIDC é o caminho oficial).
+
+### Configuração do Trusted Publishing (feita uma vez no npmjs)
+Na org `nodemelivre` → **Settings → Trusted Publishing → Add publisher**:
+- **Provider:** GitHub Actions
+- **Repository:** `Rafa-MKR2/NodeMeLivre`
+- **Workflow filename:** `publish-beta.yml`
+- **Environment:** (deixe vazio)
 
 ### Verificar status
 https://github.com/Rafa-MKR2/NodeMeLivre/actions
@@ -105,9 +114,13 @@ https://github.com/Rafa-MKR2/NodeMeLivre/actions
 - O workflow `Publish to npm` ainda não rodou para a tag `v1.0.0`
 - Verifique Actions: https://github.com/Rafa-MKR2/NodeMeLivre/actions
 
-### Publicação falha com 401/403
-- `NPM_TOKEN` expirado ou sem permissão de publicação na org `nodemelivre` do npmjs
-- Token granular: permissão **Read and write** em **Packages** da org
+### Publicação falha (403/401) ao publicar
+- **Trusted Publishing não configurado:** na org `nodemelivre` → **Settings → Trusted
+  Publishing** → **Add publisher** com o repo `Rafa-MKR2/NodeMeLivre` e o workflow
+  `publish-beta.yml` (o OIDC exige publisher registrado para o workflow exato)
+- O workflow precisa de `id-token: write` nas permissions
+- Erro `403 two-factor authentication ... bypass 2fa` em publish manual: é a política
+  de 2026 restringindo tokens de longa duração — use o workflow (OIDC), não token local
 
 ### Fallback GitHub Packages (consumidores antigos)
 ```bash

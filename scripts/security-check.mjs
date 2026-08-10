@@ -380,11 +380,12 @@ console.log('Estágio 1 — varredura estática (padrões proibidos)\n')
     ciContent.includes('permissions:') && ciContent.includes('contents: read'),
   )
   report(
-    'publish-beta.yml com permissions mínimas + NPM_TOKEN (Rodada 7, npm)',
+    'publish-beta.yml com permissions mínimas + OIDC (Rodada 7, npm)',
     publishContent.includes('permissions:') &&
       publishContent.includes('contents: read') &&
       !publishContent.includes('packages: write') &&
-      publishContent.includes('secrets.NPM_TOKEN'),
+      publishContent.includes('id-token: write') &&
+      !publishContent.includes('secrets.NPM_TOKEN'),
   )
 }
 
