@@ -27,7 +27,7 @@
     "@nodemelivre/types": "^1.0.0"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0"
+    "@types/node": "^26.2.0"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org/",
