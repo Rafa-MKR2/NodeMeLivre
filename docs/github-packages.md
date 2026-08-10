@@ -2,7 +2,7 @@
 
 ## Visão Geral
 
-O projeto usa **GitHub Packages** (`npm.pkg.github.com`) como registry privado para os pacotes `@nodemelivre/*`. Publicação automática via GitHub Actions ao dar tag `v1.0.0-beta.*`.
+O projeto usa **GitHub Packages** (`npm.pkg.github.com`) como registry privado para os pacotes `@nodemelivre/*`. Publicação automática via GitHub Actions: tag `v1.0.0-beta.*` → dist-tag `beta`; tag `v1.0.*` → dist-tag `latest` (release estável).
 
 ---
 
@@ -25,10 +25,14 @@ source ./setup-github-packages.sh ghp_seu_token_aqui
 ### 2. Instalar pacotes
 
 ```bash
+# Última versão estável (dist-tag latest — v1.0.0)
+npm install @nodemelivre/sdk
+
 # Última beta
 npm install @nodemelivre/sdk@beta
 
-# Versão específica
+# Versões específicas
+npm install @nodemelivre/sdk@1.0.0
 npm install @nodemelivre/sdk@1.0.0-beta.3
 
 # Pacotes individuais
@@ -53,15 +57,17 @@ npm install
 ## Publicação Automática (CI)
 
 ### Trigger
-- Push de tag `v1.0.0-beta.*` → publica com tag `beta` no GitHub Packages
-- Workflow: `.github/workflows/publish-beta.yml`
+- Push de tag `v1.0.0-beta.*` → publica com dist-tag `beta`
+- Push de tag `v1.0.*` → publica com dist-tag `latest` (release estável)
+- Workflow: `.github/workflows/publish-beta.yml` (renomeado "Publish to GitHub Packages")
 
 ### Pipeline
-1. Checkout + Setup Node 22
+1. Checkout + Setup Node 22 (actions v5)
 2. `npm ci` + `npm run build`
 3. `npm test` + `npm run typecheck`
-4. Publica todos os 14 pacotes `@nodemelivre/*` com `--tag beta`
-5. Pula versões já existentes (não falha)
+4. `npm audit` + SBOM CycloneDX + `security:check` (76/76)
+5. Publica os 14 pacotes `@nodemelivre/*` (dist-tag `beta` ou `latest` conforme a tag)
+6. Pula versões já existentes (não falha)
 
 ### Verificar status
 https://github.com/Rafa-MKR2/NodeMeLivre/actions
@@ -94,7 +100,7 @@ https://github.com/Rafa-MKR2/NodeMeLivre/actions
 | Tag | Registry Tag | Uso |
 |-----|--------------|-----|
 | `v1.0.0-beta.*` | `beta` | Testes, desenvolvimento |
-| `v1.0.0` | `latest` | Produção (futuro) |
+| `v1.0.0` | `latest` | **Produção — publicado em 2026-08-10** (14 packages, 417 testes, security 76/76) |
 
 ---
 
@@ -103,7 +109,7 @@ https://github.com/Rafa-MKR2/NodeMeLivre/actions
 ### "401 Unauthorized" ou "404 Not Found"
 - Token expirado ou sem escopo `read:packages`
 - Repo privado requer escopo `repo` adicional
-- Verifique: `npm view @nodemelivre/sdk@beta version`
+- Verifique: `npm view @nodemelivre/sdk version` (estável) ou `npm view @nodemelivre/sdk@beta version`
 
 ### "Scope not found"
 - Registry não configurado: `npm config set @nodemelivre:registry https://npm.pkg.github.com/`
@@ -126,5 +132,6 @@ npm view @nodemelivre/sdk dist-tags --json
 
 # Testar acesso
 source ./setup-github-packages.sh $GH_TOKEN
+npm view @nodemelivre/sdk version       # 1.0.0 (latest)
 npm view @nodemelivre/sdk@beta version
 ```
