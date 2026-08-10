@@ -1,6 +1,6 @@
 {
   "name": "@nodemelivre/webhooks",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0",
   "description": "Recursos de webhooks (notifica\u00e7\u00f5es) do NodeMeLivre para a API do Mercado Livre",
   "type": "module",
   "main": "./dist/index.js",

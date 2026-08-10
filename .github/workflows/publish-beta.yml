@@ -1,9 +1,10 @@
-name: Publish Beta to GitHub Packages
+name: Publish to GitHub Packages
 
 on:
   push:
     tags:
-      - 'v1.0.0-beta.*'
+      - 'v1.0.0-beta.*'   # betas → dist-tag beta
+      - 'v1.0.*'          # releases estáveis → dist-tag latest
 
 permissions:
   contents: read
@@ -52,10 +53,18 @@ jobs:
 
       - name: Publish to GitHub Packages
         run: |
+          # Tag beta (v1.0.0-beta.*) → dist-tag beta; tag estável (v1.0.*) → latest
+          if [[ "$GITHUB_REF_NAME" == *-beta* ]]; then
+            TAG_FLAG="--tag beta"
+            echo "Release $GITHUB_REF_NAME → dist-tag beta"
+          else
+            TAG_FLAG=""
+            echo "Release $GITHUB_REF_NAME → dist-tag latest"
+          fi
           for pkg in packages/*/; do
             name=$(basename "$pkg")
             echo "Publishing @nodemelivre/$name..."
-            if npm publish "$pkg" --tag beta --access restricted 2>&1 | grep -q "already exists"; then
+            if npm publish "$pkg" $TAG_FLAG --access restricted 2>&1 | grep -q "already exists"; then
               echo "  → @nodemelivre/$name já existe, pulando"
             else
               echo "  → @nodemelivre/$name publicado"
