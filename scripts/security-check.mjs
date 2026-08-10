@@ -112,7 +112,10 @@ function stripComments(content) {
  * fuzzing falhavam no CI (falso negativo) embora o vitest passasse.
  */
 function countPassedTests(stdout) {
-  const plain = stdout.replace(/\x1b\[[0-9;]*m/g, '')
+  // ESC via String.fromCharCode(27): o Biome proíbe control chars em regex
+  // literal (noControlCharactersInRegex) — \x1b literal quebrava o lint.
+  const esc = String.fromCharCode(27)
+  const plain = stdout.replace(new RegExp(`${esc}\\[[0-9;]*m`, 'g'), '')
   return Number(/Tests\s+(\d+) passed/i.exec(plain)?.[1] ?? 0)
 }
 
@@ -903,7 +906,9 @@ console.log('Estágio 1 — varredura estática (padrões proibidos)\n')
     const lockContent = readFileSync(lock, 'utf8')
     const parsed = JSON.parse(lockContent)
     ok = parsed.lockfileVersion === 3
-    detail = ok ? 'package-lock.json (lockfileVersion 3)' : 'lockfileVersion ≠ 3 (migre com npm install)'
+    detail = ok
+      ? 'package-lock.json (lockfileVersion 3)'
+      : 'lockfileVersion ≠ 3 (migre com npm install)'
   } catch (error) {
     // Sem package-lock.json válido (contexto npm) — procura o lock do
     // workspace pnpm em ROOT e ancestrais (cobre o SDK vendorizado). Exige

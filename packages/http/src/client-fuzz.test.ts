@@ -140,12 +140,15 @@ describe('HttpClient — fuzzing (Rodada 10+, determinístico)', () => {
 
         // INVARIANTE 1 (SEGURANÇA): nenhum fetch cross-origin carregou o Bearer.
         for (let i = 0; i < seenUrls.length; i++) {
-          const origin = new URL(seenUrls[i]!).origin
+          const url = seenUrls[i]
+          if (url === undefined) {
+            throw new Error(`grafo ${g}: seenUrls[${i}] ausente (invariante do fuzz)`)
+          }
+          const origin = new URL(url).origin
           if (origin !== new URL(BASE).origin) {
-            expect(
-              authSeen[i],
-              `grafo ${g}: Authorization vazou para ${seenUrls[i]} (hop ${i})`,
-            ).toBe(false)
+            expect(authSeen[i], `grafo ${g}: Authorization vazou para ${url} (hop ${i})`).toBe(
+              false,
+            )
           }
         }
 
@@ -231,10 +234,8 @@ describe('HttpClient — fuzzing (Rodada 10+, determinístico)', () => {
         '1.5',
       ] as const
       for (let g = 0; g < 200; g++) {
-        let slept = 0
         const sleptMax: number[] = []
         const hostileFetch: typeof fetch = async () => {
-          slept++
           return new Response(JSON.stringify({ e: 'rate' }), {
             status: 429,
             headers: { 'retry-after': pick(rand, garbage) },
