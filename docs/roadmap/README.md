@@ -121,7 +121,7 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 |---|---|
 | API pública consolidada (SDK facade: 8 resources + `auth`/`tokens`/`http` + re-exports de types/errors/core) | ✔ |
 | Docs completas (ADRs 0001–0013, exemplos, roadmap, CHANGELOG) | ✔ |
-| 171 testes (Vitest) passando (na época; hoje 319) | ✔ |
+| 171 testes (Vitest) passando (na época; hoje 417) | ✔ |
 | CI verde (lint, typecheck, teste, build) | ✔ |
 
 ## Em andamento (v1.0.x — hardening & segurança)
@@ -133,7 +133,7 @@ Visão de curto e médio prazo do SDK, com prioridades e status.
 | Integração real + chaos testing (Fase 4) | ✔ Concluído |
 | Auditoria de segurança (7 rodadas, 29 achados / 27 corrigidos) | ✔ Concluído — ver [auditoria-seguranca.md](../auditoria-seguranca.md) |
 | Fase 2.2 (validator middleware no ResourceTransport) e Fase 5 (métricas, circuit breaker, idempotency) | ⏳ Planejado |
-| 325 testes (Vitest) | ✔ |
+| 417 testes (Vitest) | ✔ |
 
 ---
 

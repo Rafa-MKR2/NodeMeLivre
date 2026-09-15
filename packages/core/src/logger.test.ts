@@ -230,7 +230,7 @@ describe('DeduplicatingLogger — fuzzing (Rodada 9+, determinístico)', () => {
       ...new Set(
         raw
           .split(/[\s,]+/)
-          .map((s) => Number.parseInt(s, 0))
+          .map((s) => Number(s))
           .filter((n) => Number.isFinite(n))
           .map((n) => n >>> 0),
       ),
